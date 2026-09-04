@@ -1,0 +1,1 @@
+add_mlir_dialect(ScheduleOps plena_sched)

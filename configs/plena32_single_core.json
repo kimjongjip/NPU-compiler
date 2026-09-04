@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "architecture": {
+    "array_rows": 32,
+    "array_columns": 32,
+    "dataflow": "output_stationary",
+    "physical_cores": 1,
+    "logical_cores": 1,
+    "logical_to_physical": [
+      0
+    ]
+  },
+  "memory": {
+    "l1_bytes_per_core": 4194304,
+    "l2_bytes": 8388608,
+    "alignment": 64
+  },
+  "tiling": {
+    "k_chunk": 64
+  },
+  "command_processor": {
+    "completion_event_slots": 65536
+  },
+  "isa": {
+    "version": 5,
+    "word_bits": 32,
+    "address_unit": "byte"
+  }
+}

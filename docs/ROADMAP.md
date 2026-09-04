@@ -1,0 +1,75 @@
+# PLENA compiler roadmap
+
+## Implemented baseline
+
+- Standalone LLVM/MLIR 24 project and `plena-opt` driver.
+- Memory, Tile, Schedule, Command, and ISA dialects.
+- Static FP16 `linalg.matmul` verification.
+- Byte-addressed LP6/shared-L2/private-L1 planning.
+- 32x32 M/N tiling, M/N tails, temporal K chunk accumulation.
+- Contiguous N-axis logical-core distribution without split-K.
+- Explicit GDMA and per-core LDMA insertion.
+- Event-SSA schedule lowered to numeric Program v5 completion events.
+- Native C++ core ISA and unified Program v5 encoders.
+- Simulator bundle writer and 1/2-core FP16-exact integration regression.
+
+## Next milestones
+
+### 1. Streaming shared-L2 planner
+
+Replace the current whole-tensor L2 residency requirement with reusable L2
+windows. Weights remain in LP6 and are brought in as contiguous output-channel
+batches. Add lifetime and alias verification before enabling reuse, plus an
+explicit result GDMA store or runtime-visible shared-L2 handoff contract.
+
+### 2. Compiler-controlled double buffering
+
+Add `off`, `l1`, and `l1-l2` scheduling modes. Allocate explicit Ping/Pong
+ranges, emit tagged `L2_LOAD_*_ASYNC_EVENT` plus `C_WAIT_EVENT`, and overlap
+the next LP6/L2 batch with the current core block when dependencies permit.
+
+### 3. Generic VPU lowering
+
+Introduce semantic `silu`, `rms_norm`, `softmax`, `rope`, and elementwise ops.
+Lower them to generic Vector/Scalar/Reduction ISA while retaining intermediate
+streams until an explicit store. Do not introduce model-specific fused ISA.
+
+### 4. Attention and decode
+
+Lower QK, scale/mask, row reduction, EXP, normalization, and PV as separate
+scheduled stages. Support M=1 GEMV on the Matrix engine first, then compare a
+dedicated GEMV mapping if simulator evidence justifies it.
+
+### 5. Full model memory and multicore flow
+
+Keep hidden/KV state in LP6 or shared L2 according to lifetime. Partition
+projection output channels and attention head groups across logical cores.
+Write disjoint shards into shared L2 and use multi-event dependencies before a
+consumer requiring the complete tensor. Keep split-K disabled until a real
+collective/reduction design exists.
+
+### 6. torch.export frontend
+
+Reuse the ETRI external-parameter capture, package hashing, and dense-decoder
+graph certificate. Replace its legacy semantic-template renderer with actual
+Torch/Linalg-to-PLENA patterns so backend legality follows SSA rather than a
+fixed Llama stage count.
+
+### 7. Dtype expansion
+
+After FP16 end-to-end is stable, preserve INT8 checkpoint payloads in LP6 and
+add type legalization for W8A8 and INT8-to-FP16 dequant paths. INT4 remains a
+later packed-storage extension.
+
+## Acceptance target
+
+The next major endpoint is compiler-generated SmolLM2-360M prefill and decode:
+
+```text
+local Hugging Face checkpoint
+  -> torch.export / torch-mlir
+  -> PLENA semantic and memory schedule
+  -> program.bin + system.json + lp6.bin
+  -> Rust simulator
+  -> exact/thresholded logits and generated token comparison
+```

@@ -1,0 +1,5 @@
+add_subdirectory(Memory)
+add_subdirectory(Tile)
+add_subdirectory(Schedule)
+add_subdirectory(Command)
+add_subdirectory(ISA)
