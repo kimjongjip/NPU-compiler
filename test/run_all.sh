@@ -25,3 +25,15 @@ python3 "${COMPILER_ROOT}/tools/import_simulator_config.py" \
 cmp "${COMPILER_ROOT}/configs/plena32_single_core.json" \
   "${NORMALIZED_CONFIG}"
 python3 "${COMPILER_ROOT}/test/run_matmul_e2e.py"
+
+if find "${COMPILER_ROOT}/tools/frontend" "${COMPILER_ROOT}/tools/full_model" \
+    -type l -print -quit | grep -q .; then
+  echo "vendored model frontend/backend must not contain symbolic links" >&2
+  exit 1
+fi
+if rg -n '/data2/jongjip/etri-mlir/compiler/(tools|examples)' \
+    "${COMPILER_ROOT}/tools/frontend" "${COMPILER_ROOT}/tools/full_model"; then
+  echo "vendored model sources must not import source from the ETRI tree" >&2
+  exit 1
+fi
+"${COMPILER_ROOT}/build/bin/plena-compile-model" --help >/dev/null

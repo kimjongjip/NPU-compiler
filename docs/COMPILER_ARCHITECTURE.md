@@ -19,6 +19,31 @@ linalg/semantic graph                  Program v5 parser
 
 ## IR boundaries
 
+## Full-model frontend boundary
+
+`plena-compile-model` owns a separate model-level path while the native MLIR
+passes are expanded beyond matmul:
+
+```text
+Hugging Face module + fake capture tensors
+  -> torch.export.ExportedProgram
+  -> official Torch MLIR
+  -> semantic_certificate.json
+  -> model-specialized generic-ISA reference lowering
+```
+
+The certificate checks the complete captured graph, supported operator set,
+operator multiplicities and topology, external parameter names/shapes, tied
+embedding/LM-head ABI, normalization placement, GQA dimensions, output shape,
+and target capability constraints. Fake tensors are discarded before target
+generation; the LP6 packer reads the real safetensors checkpoint.
+
+This path is executable but deliberately does not pretend to be native
+full-graph MLIR lowering. Its `compilation.json` records
+`operation_driven_cpp_mlir_backend: false`. The target program nevertheless
+uses only the same generic core ISA and unified Program v5 understood by the
+Rust simulator.
+
 ### Input MLIR
 
 The initial frontend accepts one standard buffer-form operation:

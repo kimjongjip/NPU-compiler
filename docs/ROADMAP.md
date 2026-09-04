@@ -12,6 +12,12 @@
 - Event-SSA schedule lowered to numeric Program v5 completion events.
 - Native C++ core ISA and unified Program v5 encoders.
 - Simulator bundle writer and 1/2-core FP16-exact integration regression.
+- Physically vendored torch.export/torch-mlir graph frontend and dense-decoder
+  semantic certificate.
+- Transitional full-Llama prefill reference lowering to generic PLENA ISA,
+  including all decoder layers, final RMSNorm, and LM head.
+- Full Llama-3.2-1B Rust simulator execution with exact target-contract logits
+  and matching Hugging Face FP16 next token.
 
 ## Next milestones
 
@@ -28,9 +34,10 @@ Add `off`, `l1`, and `l1-l2` scheduling modes. Allocate explicit Ping/Pong
 ranges, emit tagged `L2_LOAD_*_ASYNC_EVENT` plus `C_WAIT_EVENT`, and overlap
 the next LP6/L2 batch with the current core block when dependencies permit.
 
-### 3. Generic VPU lowering
+### 3. Native generic VPU lowering
 
-Introduce semantic `silu`, `rms_norm`, `softmax`, `rope`, and elementwise ops.
+Move the already executable reference lowering for semantic `silu`, `rms_norm`,
+`softmax`, `rope`, and elementwise ops into native MLIR passes.
 Lower them to generic Vector/Scalar/Reduction ISA while retaining intermediate
 streams until an explicit store. Do not introduce model-specific fused ISA.
 
@@ -48,12 +55,13 @@ Write disjoint shards into shared L2 and use multi-event dependencies before a
 consumer requiring the complete tensor. Keep split-K disabled until a real
 collective/reduction design exists.
 
-### 6. torch.export frontend
+### 6. Replace the transitional full-model lowering
 
-Reuse the ETRI external-parameter capture, package hashing, and dense-decoder
-graph certificate. Replace its legacy semantic-template renderer with actual
-Torch/Linalg-to-PLENA patterns so backend legality follows SSA rather than a
-fixed Llama stage count.
+The torch.export capture, package hashing, and dense-decoder graph certificate
+are now vendored and operational. Replace the model-specialized Python
+reference backend with actual Torch/Linalg-to-PLENA MLIR patterns so scheduling
+and backend legality follow imported SSA rather than a fixed Llama stage
+sequence.
 
 ### 7. Dtype expansion
 
@@ -63,7 +71,8 @@ later packed-storage extension.
 
 ## Acceptance target
 
-The next major endpoint is compiler-generated SmolLM2-360M prefill and decode:
+Full static prefill is now executable. The next major endpoint is native-MLIR
+prefill plus stateful decode:
 
 ```text
 local Hugging Face checkpoint

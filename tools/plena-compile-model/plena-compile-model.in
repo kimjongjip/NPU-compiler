@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export PYTHONDONTWRITEBYTECODE=1
+
+PLENA_COMPILER_SOURCE="@PLENA_SOURCE_DIR@"
+if [[ -n "${PLENA_TORCH_MLIR_PYTHON:-}" ]]; then
+  PLENA_MODEL_PYTHON=${PLENA_TORCH_MLIR_PYTHON}
+elif [[ -x /data2/jongjip/etri-mlir/compiler/tools/third_party/torch-mlir/.venv/bin/python ]]; then
+  PLENA_MODEL_PYTHON=/data2/jongjip/etri-mlir/compiler/tools/third_party/torch-mlir/.venv/bin/python
+else
+  echo "plena-compile-model: set PLENA_TORCH_MLIR_PYTHON to a Python containing torch, transformers, and torch-mlir" >&2
+  exit 3
+fi
+
+exec "${PLENA_MODEL_PYTHON}" \
+  "${PLENA_COMPILER_SOURCE}/tools/plena-compile-model/plena_compile_model.py" "$@"

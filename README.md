@@ -5,7 +5,7 @@ The project reuses the proven multi-level organization of the ETRI compiler,
 but its memory hierarchy, tiling, scheduling, command IR, and binary encoder
 are native to the PLENA Program v5 ABI.
 
-The first executable vertical slice is complete:
+Two executable paths are available:
 
 ```text
 static FP16 linalg.fill + linalg.matmul
@@ -16,6 +16,12 @@ static FP16 linalg.fill + linalg.matmul
   -> structured command records
   -> unified 32-bit program.bin
   -> PLENA Rust simulator
+
+local Hugging Face Llama checkpoint
+  -> torch.export capture -> official torch-mlir Torch IR
+  -> fail-closed graph/state/capability certificate
+  -> dense-Llama reference lowering to generic PLENA ISA
+  -> Program v5 + LP6 image -> PLENA Rust simulator
 ```
 
 ## Current support
@@ -31,13 +37,17 @@ static FP16 linalg.fill + linalg.matmul
 - Program v5 `CORE_BEGIN/CORE_END`, numeric dependencies, and configurable
   logical-to-physical placement.
 - Compiler bundle execution on the Rust simulator with FP16 byte-exact tests.
+- Physically vendored PyTorch/torch-mlir graph frontend; no ETRI source import
+  or frontend symlink is used at runtime.
+- Full supported Llama prefill through every decoder layer, final norm, and LM
+  head, with Rust SRAM/logit checking and optional Hugging Face eager comparison.
 
-The initial planner requires the complete activation, weight, and output to fit
-the 8 MiB shared L2. Streaming L2 windows, compiler-generated double buffering,
-generic VPU lowering, attention, and full Hugging Face models are subsequent
-passes, not silently approximated features. The current output ABI leaves the
-completed tensor in shared L2; an explicit final GDMA store/runtime handoff is
-part of the full-model memory protocol.
+The native C++ MLIR backend still accepts one matmul and requires its complete
+activation, weight, and output to fit the 8 MiB shared L2. The full-model path
+is intentionally identified as a graph-certified, model-specialized reference
+lowering: it emits generic Matrix/Vector/Scalar ISA, but it is not yet a
+general operation-by-operation Torch/Linalg-to-PLENA pass pipeline. This
+boundary is recorded in every `compilation.json` rather than hidden.
 
 ## Build
 
@@ -53,6 +63,26 @@ cmake --build build --target plena-compile plena-opt -- -j4
 
 `PLENA_MLIR_BUILD` can select another compatible LLVM/MLIR 24 build when using
 `test/run_all.sh`.
+
+## Compile and execute a Hugging Face model
+
+The model directory must be local. The default compiles every layer, final
+RMSNorm, and LM head, executes the Rust simulator, and compares the next-token
+logits with Hugging Face FP16 eager execution:
+
+```bash
+build/bin/plena-compile-model \
+  --hf-model /home/jongjip/models/llama_3.2_1b_instruct \
+  --prompt "The capital of France is" \
+  --output-dir /tmp/plena-llama32-1b \
+  --execute
+```
+
+The wrapper uses `PLENA_TORCH_MLIR_PYTHON` when set. On this server it otherwise
+selects the pinned torch-mlir Python under `/data2/jongjip/etri-mlir`. That is a
+binary Python/toolchain dependency, not a source-code link. See
+[full-model E2E](docs/FULL_MODEL_E2E.md) for ownership, artifacts, results, and
+current restrictions.
 
 ## Test
 
@@ -70,6 +100,7 @@ The regression covers:
 - round-trip parsing of every emitted MLIR level;
 - Rust simulator Program v5 decoding and exact FP16 output;
 - rejection of a matmul without zero initialization.
+- frontend source ownership/no-symlink checks and model-driver CLI smoke test.
 
 Reference results in the checked configuration:
 
@@ -130,6 +161,12 @@ python3 tools/import_simulator_config.py \
 | `model_manifest.json` | Tensor shapes, LP6/L2 byte locations, output ABI |
 | `lp6.bin` | Activation and weight payload image |
 | `compile_report.json` | Tiling, memory, command, and word counts |
+
+Full-model bundles additionally contain `frontend/`, `semantic_certificate.json`,
+`model_spec.json`, `capability_report.json`, `target/metadata.json`,
+`target/expected.pt`, and—when executed—`target/timing.json`,
+`target/sram_dump.bin`, `target/check_result.json`, `execution.json`, and
+`hf_comparison.json`.
 
 See [compiler architecture](docs/COMPILER_ARCHITECTURE.md) and
 [implementation roadmap](docs/ROADMAP.md).
