@@ -15,7 +15,7 @@ The frontend path is:
 
 `plena_static_frontend.py` and `plena_decode_generator.py` are retained as the
 model/config capability normalizer used by the certificate. Their old ETRI
-dialect renderers are compatibility code and are not the PLENA Program-v5
+dialect renderers are compatibility code and are not the PLENA Program-v7
 lowering path.
 
 External dependencies remain normal toolchain/runtime dependencies: Python,

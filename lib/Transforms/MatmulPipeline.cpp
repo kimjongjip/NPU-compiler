@@ -11,7 +11,7 @@
 #include "PLENA/Dialect/Tile/TileDialect.h"
 #include "PLENA/Dialect/Tile/TileOps.h"
 #include "PLENA/Target/CoreISAEmitter.h"
-#include "PLENA/Target/ProgramV5.h"
+#include "PLENA/Target/ProgramV7.h"
 #include "PLENA/Target/Target.h"
 #include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/SmallVector.h"
@@ -32,7 +32,7 @@ namespace mlir::plena {
 #define GEN_PASS_DEF_TILEMATMUL
 #define GEN_PASS_DEF_SCHEDULEMATMUL
 #define GEN_PASS_DEF_LOWERTOCOMMANDS
-#define GEN_PASS_DEF_ENCODEPROGRAMV5
+#define GEN_PASS_DEF_ENCODEPROGRAMV7
 #include "PLENA/Transforms/Passes.h.inc"
 } // namespace mlir::plena
 
@@ -551,8 +551,8 @@ public:
   }
 };
 
-class EncodeProgramV5Pass
-    : public mlir::plena::impl::EncodeProgramV5Base<EncodeProgramV5Pass> {
+class EncodeProgramV7Pass
+    : public mlir::plena::impl::EncodeProgramV7Base<EncodeProgramV7Pass> {
 public:
   void getDependentDialects(DialectRegistry &registry) const override {
     registry.insert<plena_isa::PLENAISADialect>();
@@ -614,7 +614,7 @@ public:
       signalPassFailure();
       return;
     }
-    auto image = encodeProgramV5(records, config->completionEventSlots);
+    auto image = encodeProgramV7(records, config->completionEventSlots);
     if (!image) {
       module.emitError(llvm::toString(image.takeError()));
       signalPassFailure();
@@ -670,6 +670,6 @@ std::unique_ptr<Pass> mlir::plena::createLowerToCommandsPass() {
   return std::make_unique<LowerToCommandsPass>();
 }
 
-std::unique_ptr<Pass> mlir::plena::createEncodeProgramV5Pass() {
-  return std::make_unique<EncodeProgramV5Pass>();
+std::unique_ptr<Pass> mlir::plena::createEncodeProgramV7Pass() {
+  return std::make_unique<EncodeProgramV7Pass>();
 }

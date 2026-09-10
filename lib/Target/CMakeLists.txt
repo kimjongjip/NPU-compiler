@@ -1,7 +1,7 @@
 add_mlir_library(PLENATarget
   Target.cpp
   CoreISAEmitter.cpp
-  ProgramV5.cpp
+  ProgramV7.cpp
 
   ADDITIONAL_HEADER_DIRS
   ${PROJECT_SOURCE_DIR}/include/PLENA/Target

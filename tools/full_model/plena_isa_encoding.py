@@ -33,13 +33,41 @@ def _addi(rd: int, rs1: int, immediate: int) -> int:
 
 
 def load_u32(register: int, value: int) -> list[int]:
-    """Materialize one uint32 in a GP register without host-width leakage."""
+    """Set one uint32 independently of old GP contents, including writable GP0."""
 
     value &= 0xFFFF_FFFF
-    if value < 1 << 18:
-        return [_addi(register, 0, value)]
     upper, lower = value >> 12, value & 0xFFF
     words = [OP_S_LUI_INT | register << 6 | upper << 10]
     if lower:
         words.append(_addi(register, register, lower))
     return words
+
+def matrix_load(address: int, rows: int, columns: int, stride_bytes: int,
+                funct: int = 3) -> list[int]:
+    """Program v7: W=[K,N] or A=[M,K], explicit byte stride."""
+    if funct not in (1, 3, 5, 7):
+        raise ValueError("invalid Matrix load mode")
+    if not (0 < rows < 1 << 32 and 0 < columns < 1 << 32 and 0 <= stride_bytes < 1 << 32):
+        raise ValueError("Matrix extents/stride must fit u32 and extents must be positive")
+    width = 1 if funct in (1, 5) else 2
+    if stride_bytes < columns * width or stride_bytes % width:
+        raise ValueError("invalid Matrix byte stride")
+    return [rform(0x37, rs1=address, funct=funct), rows, columns, stride_bytes]
+
+
+def matrix_mma(m: int, n: int, k: int, funct: int = 3,
+               *, accumulate: bool = False) -> list[int]:
+    """Program v7: INIT or ACCUMULATE a tile with explicit M/N/K."""
+    if funct not in (1, 3) or any(not 0 < x < 1 << 32 for x in (m, n, k)):
+        raise ValueError("invalid Matrix MMA mode/extents")
+    return [rform(0x3b, funct=funct) | int(accumulate) << 26, m, n, k]
+
+
+def matrix_writeout(address: int, m: int, n: int, stride_bytes: int,
+                    funct: int = 1) -> list[int]:
+    width = 4 if funct in (2, 4) else 2
+    if funct not in (1, 2, 4) or any(not 0 < x < 1 << 32 for x in (m, n, stride_bytes)):
+        raise ValueError("invalid Matrix writeout mode/extents")
+    if stride_bytes < n * width or stride_bytes % width:
+        raise ValueError("invalid Matrix output byte stride")
+    return [rform(0x3c, rd=address, funct=funct), m, n, stride_bytes]

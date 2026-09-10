@@ -28,9 +28,9 @@ def LowerToCommands : Pass<"plena-lower-to-commands", "ModuleOp"> {
   let constructor = "mlir::plena::createLowerToCommandsPass()";
 }
 
-def EncodeProgramV5 : Pass<"plena-encode-program-v5", "ModuleOp"> {
-  let summary = "Encode command records into one unified PLENA Program v5";
-  let constructor = "mlir::plena::createEncodeProgramV5Pass()";
+def EncodeProgramV7 : Pass<"plena-encode-program-v7", "ModuleOp"> {
+  let summary = "Encode command records into one unified PLENA Program v7";
+  let constructor = "mlir::plena::createEncodeProgramV7Pass()";
 }
 
 #endif // PLENA_TRANSFORMS_PASSES_TD

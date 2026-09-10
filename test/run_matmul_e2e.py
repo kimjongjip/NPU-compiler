@@ -202,20 +202,20 @@ def compile_and_run(
     system = json.loads((bundle / "system.json").read_text(encoding="utf-8"))
     program = (bundle / "program.bin").read_bytes()
     header = struct.unpack("<5I", program[:20])
-    if header[0] != int.from_bytes(b"PLN5", "little") or header[1] != 5:
-        raise RuntimeError("compiler did not emit a Program v5 header")
+    if header[0] != int.from_bytes(b"PLN7", "little") or header[1] != 7:
+        raise RuntimeError("compiler did not emit a Program v7 header")
     if header[2] * 4 != len(program):
-        raise RuntimeError("Program v5 header length is inconsistent")
+        raise RuntimeError("Program v7 header length is inconsistent")
     if (
         int(system["program_word_count"]) != header[2]
         or int(system["command_count"]) != header[3]
         or int(system["core_instruction_count"]) != header[4]
     ):
-        raise RuntimeError("Program v5 header and system sidecar disagree")
+        raise RuntimeError("Program v7 header and system sidecar disagree")
     if list(bundle.glob("*.mem")) or (bundle / "core_isa.bin").exists():
         raise RuntimeError("compiler emitted a removed per-core program artifact")
-    if timing["program_abi"] != "unified_command_isa_v5":
-        raise RuntimeError("simulator did not select the unified Program v5 ABI")
+    if timing["program_abi"] != "unified_command_isa_v7":
+        raise RuntimeError("simulator did not select the unified Program v7 ABI")
     tile_count = ((problem.m + 31) // 32) * ((problem.n + 31) // 32)
     if (
         timing["core_block_count"] != tile_count

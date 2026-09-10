@@ -199,9 +199,9 @@ int main(int argc, char **argv) {
   const std::string commands = printModule(*module);
 
   PassManager encoding(&context);
-  encoding.addPass(::mlir::plena::createEncodeProgramV5Pass());
+  encoding.addPass(::mlir::plena::createEncodeProgramV7Pass());
   if (failed(encoding.run(*module))) {
-    llvm::errs() << "plena-compile: Program v5 encoding failed\n";
+    llvm::errs() << "plena-compile: Program v7 encoding failed\n";
     return 1;
   }
   const std::string lowered = printModule(*module);
@@ -261,7 +261,7 @@ int main(int argc, char **argv) {
   llvm::outs() << "compiled FP16 matmul " << problem->m << 'x' << problem->k
                << " x " << problem->k << 'x' << problem->n << " to "
                << program.getWords().size()
-               << " unified Program v5 words across " << config->logicalCores
+               << " unified Program v7 words across " << config->logicalCores
                << " logical core(s)\n";
   return 0;
 }

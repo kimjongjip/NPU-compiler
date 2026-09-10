@@ -1,4 +1,4 @@
-#include "PLENA/Target/ProgramV5.h"
+#include "PLENA/Target/ProgramV7.h"
 
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/Support/JSON.h"
@@ -39,8 +39,8 @@ llvm::StringRef nameOf(const ProgramRecord &record) {
 
 } // namespace
 
-llvm::Expected<ProgramV5Image>
-plena::target::encodeProgramV5(llvm::ArrayRef<ProgramRecord> records,
+llvm::Expected<ProgramV7Image>
+plena::target::encodeProgramV7(llvm::ArrayRef<ProgramRecord> records,
                                uint32_t completionEventSlots) {
   if (records.empty())
     return llvm::createStringError("unified program contains no commands");
@@ -68,7 +68,7 @@ plena::target::encodeProgramV5(llvm::ArrayRef<ProgramRecord> records,
       return llvm::createStringError(
           "command references an unknown completion event");
 
-  ProgramV5Image image;
+  ProgramV7Image image;
   image.commandCount = static_cast<uint32_t>(records.size());
   image.words.resize(kHeaderWords, 0);
   uint64_t coreInstructions = 0;
@@ -129,8 +129,8 @@ plena::target::encodeProgramV5(llvm::ArrayRef<ProgramRecord> records,
   if (image.words.size() > UINT32_MAX)
     return llvm::createStringError("unified program word count exceeds uint32");
   image.coreInstructionCount = static_cast<uint32_t>(coreInstructions);
-  image.words[0] = kProgramV5Magic;
-  image.words[1] = kProgramV5Version;
+  image.words[0] = kProgramV7Magic;
+  image.words[1] = kProgramV7Version;
   image.words[2] = static_cast<uint32_t>(image.words.size());
   image.words[3] = image.commandCount;
   image.words[4] = image.coreInstructionCount;
@@ -138,7 +138,7 @@ plena::target::encodeProgramV5(llvm::ArrayRef<ProgramRecord> records,
 }
 
 std::string plena::target::buildSystemManifestJSON(
-    const ProgramV5Image &image, llvm::ArrayRef<ProgramRecord> records,
+    const ProgramV7Image &image, llvm::ArrayRef<ProgramRecord> records,
     llvm::ArrayRef<uint32_t> logicalToPhysical, uint64_t l2BytesRequired,
     llvm::StringRef l2RegionsJSON) {
   llvm::json::Array symbols;
@@ -172,7 +172,7 @@ std::string plena::target::buildSystemManifestJSON(
   }
 
   llvm::json::Object root{
-      {"schema", "plena.v2.unified_program.v5"},
+      {"schema", "plena.v2.unified_program.v7"},
       {"program", "program.bin"},
       {"program_word_count", static_cast<int64_t>(image.words.size())},
       {"command_count", image.commandCount},
@@ -187,7 +187,7 @@ std::string plena::target::buildSystemManifestJSON(
 }
 
 llvm::Expected<std::string> plena::target::augmentCompileReportJSON(
-    llvm::StringRef report, const ProgramV5Image &image) {
+    llvm::StringRef report, const ProgramV7Image &image) {
   auto parsed = llvm::json::parse(report);
   if (!parsed)
     return parsed.takeError();
@@ -195,7 +195,7 @@ llvm::Expected<std::string> plena::target::augmentCompileReportJSON(
   if (!root)
     return llvm::createStringError("compile report root is not an object");
   (*root)["program"] = llvm::json::Object{
-      {"abi", "unified_command_isa_v5"},
+      {"abi", "unified_command_isa_v7"},
       {"word_bits", 32},
       {"endianness", "little"},
       {"program_words", static_cast<int64_t>(image.words.size())},

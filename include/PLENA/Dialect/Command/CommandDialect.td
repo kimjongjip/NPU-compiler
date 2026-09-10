@@ -8,7 +8,7 @@ include "mlir/IR/OpBase.td"
 def PLENACommand_Dialect : Dialect {
   let name = "plena_cmd";
   let cppNamespace = "::mlir::plena_cmd";
-  let summary = "Structured PLENA Program v5 command records";
+  let summary = "Structured PLENA Program v7 command records";
 }
 
 class PLENACommand_Op<string mnemonic, list<Trait> traits = []>

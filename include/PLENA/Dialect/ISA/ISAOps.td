@@ -6,7 +6,7 @@
 include "PLENA/Dialect/ISA/ISADialect.td"
 
 def PLENAISA_ProgramOp : PLENAISA_Op<"program"> {
-  let summary = "Hold one complete little-endian unified Program v5 image";
+  let summary = "Hold one complete little-endian unified Program v7 image";
   let arguments = (ins DenseI32ArrayAttr:$words,
                        StrAttr:$system_manifest,
                        StrAttr:$model_manifest,

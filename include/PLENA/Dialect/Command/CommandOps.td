@@ -6,7 +6,7 @@
 include "PLENA/Dialect/Command/CommandDialect.td"
 
 def PLENACommand_MetadataOp : PLENACommand_Op<"metadata"> {
-  let summary = "Bundle metadata carried to final Program v5 serialization";
+  let summary = "Bundle metadata carried to final Program v7 serialization";
   let arguments = (ins StrAttr:$model_manifest,
                        StrAttr:$compile_report,
                        StrAttr:$l2_regions,

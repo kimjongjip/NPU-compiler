@@ -1,4 +1,4 @@
-"""Unified 32-bit command-ISA builder for PLENA v2 test programs.
+"""Unified Program v7 command-ISA builder with inline Matrix parameters.
 
 The generated ``program.bin`` interleaves system-level GDMA records with
 ``CORE_BEGIN``/core-local words/``CORE_END`` records. Every physical word is
@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Iterable
 
 
-PROGRAM_MAGIC = int.from_bytes(b"PLN5", "little")
-PROGRAM_VERSION = 5
+PROGRAM_MAGIC = int.from_bytes(b"PLN7", "little")
+PROGRAM_VERSION = 7
 PROGRAM_HEADER_WORDS = 5
 OP_CORE_BEGIN = 0x26
 OP_CORE_END = 0x27
@@ -75,6 +75,9 @@ def encode_unified_program(
             command_ids[str(name)] for name in command.get("dependencies", [])
         ]
         kind = str(command["kind"])
+        if kind == "barrier":
+            append_words([0x2d, numeric_id, len(dependencies), *dependencies])
+            continue
         if kind == "core_block":
             start = int(command["isa_start_word"])
             count = int(command["isa_word_count"])
@@ -186,6 +189,15 @@ def inspect_unified_program(program: bytes) -> dict[str, object]:
     for _ in range(command_count):
         opcode = words[cursor]
         cursor += 1
+        if opcode == 0x2d:
+            command_id, dependency_count = words[cursor:cursor+2]
+            cursor += 2
+            dependencies = words[cursor:cursor+dependency_count]
+            if len(dependencies) != dependency_count:
+                raise ValueError("truncated barrier record")
+            cursor += dependency_count
+            records.append({"id":command_id,"kind":"barrier","dependencies":dependencies})
+            continue
         if opcode in (OP_GDMA_LOAD, OP_GDMA_STORE):
             command_id, dependency_count = words[cursor : cursor + 2]
             lp6_address = words[cursor + 2] | words[cursor + 3] << 32
@@ -291,10 +303,22 @@ class SystemProgramBuilder:
         self._control: dict[int, int] = {}
         self._replay_state = False
 
-    def append(self, word: int) -> None:
+    def append(self, word: int | list[int]) -> None:
+        if isinstance(word, (list, tuple)):
+            if len(word) != 4 or (word[0] & 0x3f) not in (0x36, 0x37, 0x3a, 0x3b, 0x3c):
+                raise ValueError("expected a four-word inline Matrix record")
+            if any(not 0 <= item < 1 << 32 for item in word):
+                raise ValueError("Matrix payload does not fit u32")
+            self._ensure_segment()
+            self._words.extend(word)
+            return
         if not 0 <= word < 1 << 32:
             raise ValueError(f"core ISA word does not fit 32 bits: {word}")
         opcode = word & 0x3F
+        if opcode in (0x36, 0x37, 0x3a, 0x3b, 0x3c):
+            raise ValueError("Matrix needs an inline record; use matrix_load/mma/writeout")
+        if opcode == 0x39 and ((word >> 22) & 15) in (4, 5, 6, 8, 9, 10):
+            raise ValueError("Matrix C_SET registers were removed in Program v7")
         if opcode in (0x2B, 0x3A):
             raise ValueError(
                 "LP6 address/GDMA opcodes are system commands and cannot enter a core ISA stream"
@@ -348,6 +372,15 @@ class SystemProgramBuilder:
         elif opcode == 0x39:
             funct = word >> 22 & 0xF
             self._control[funct] = self._gp[rd]
+
+    def barrier(self, dependencies: list[str] | None = None) -> str:
+        """Join explicit events; by default join all previously emitted work."""
+        self._flush_core_block()
+        deps = [str(c["id"]) for c in self.commands] if dependencies is None else dependencies
+        name = f"barrier_{len(self.commands):06d}"
+        self.commands.append({"id":name,"kind":"barrier","dependencies":deps})
+        self._frontier = [name]
+        return name
 
     def gdma_load(
         self,
@@ -533,7 +566,7 @@ class SystemProgramBuilder:
         core_isa_path.unlink()
         logical_cores = max(1, self.logical_core + 1)
         payload: dict[str, object] = {
-            "schema": "plena.v2.unified_program.v5",
+            "schema": "plena.v2.unified_program.v7",
             "program": program_name,
             "program_word_count": len(unified_program) // 4,
             "command_count": len(self.commands),

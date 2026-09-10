@@ -9,8 +9,8 @@
 - 32x32 M/N tiling, M/N tails, temporal K chunk accumulation.
 - Contiguous N-axis logical-core distribution without split-K.
 - Explicit GDMA and per-core LDMA insertion.
-- Event-SSA schedule lowered to numeric Program v5 completion events.
-- Native C++ core ISA and unified Program v5 encoders.
+- Event-SSA schedule lowered to numeric Program v7 completion events.
+- Native C++ core ISA and unified Program v7 encoders.
 - Simulator bundle writer and 1/2-core FP16-exact integration regression.
 - Physically vendored torch.export/torch-mlir graph frontend and dense-decoder
   semantic certificate.

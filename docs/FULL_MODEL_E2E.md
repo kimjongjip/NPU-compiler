@@ -1,5 +1,43 @@
 # Full Hugging Face model path
 
+Current Program v7 validation: 2026-09-10, actual Llama-3.2-1B layer 0,
+six prompt tokens, all 16 FP16 checkpoints bit-exact with atol=0.
+Continuous per-K FP32 reference accumulation matches the revised Matrix contract.
+Total: 9,983,215 cycles; RF live-data peak: 448 B/core.
+Artifacts: `/tmp/plena-generality-v7.ke5vTC/llama_layer`.
+This layer check used the local model backend generator plus Rust execution;
+it was not a new full-model torch.export/LM-head run.
+The complete 16-layer model was **not rerun for v7**. Historical full-model
+results below must not be reported as v7 timing. New generic ISA/queue details:
+`PLENA_Simulator/transactional_emulator/docs/ISA_V7_GENERALITY.md`.
+
+The model environment can use Python 3.10. TOML parsing then delegates to the
+local config tool under `PLENA_CONFIG_PYTHON` (default `python3`, requires 3.11+).
+Set that variable to a Python 3.11+ executable if the shell's python3 is also 3.10.
+No additional parser is imported from the ETRI source tree, and RF limits are
+validated before expensive model capture.
+
+2026-09-10 update: Vector code generation now tiles to the simulator's finite
+register capacity (default 16 registers × 512 bits per core). The full-model
+driver reads the width from its simulator settings; its current dense decoder
+assignment requires at least seven vector registers. `bounded_vector_emitter.py`
+is physically vendored here, not linked/imported from the simulator project.
+Older programs with oversized vector values must be regenerated. The full-model
+cycle numbers below predate this change. A new full Llama layer (six prompt
+tokens) was compiled and verified with zero FP16 error at every checkpoint;
+the complete 16-layer model has not been rerun for this change.
+
+Current compiler/simulator output uses Program v7 with inline Matrix shape and
+retained Vector values. The 2026-09-04/08 results below are archived v5 results,
+not instructions to run old binaries through the new decoder. Historical v6 validation
+is recorded in `PLENA_Simulator/transactional_emulator/docs/ISA_V6_MIGRATION.md`.
+
+The final v6 run completed all 16 layers and LM head with 18 bit-exact FP16
+checkpoints and the same ` Paris` next token. It reports 199,181,725 cycles.
+Its 46,588,072-byte program has 11,204,360 encoded core words, including Matrix
+payloads. Results are retained at
+`/home/jongjip/LP6/runs/llama32-1b-isa6-final-20260909`.
+
 ## What is implemented
 
 `plena-compile-model` performs one end-to-end static prefill run:
@@ -10,7 +48,7 @@ local Hugging Face checkpoint
   -> official torch-mlir FX import (Torch dialect MLIR)
   -> graph/operator/parameter ABI/capability certificate
   -> checkpoint packing and generic PLENA ISA scheduling
-  -> unified Program v5 + LP6 image
+  -> unified Program v7 + LP6 image
   -> Rust functional and resource-aware timing simulator
   -> SRAM logits versus target golden
   -> optional Hugging Face FP16 eager comparison
@@ -69,9 +107,25 @@ Result with the checked simulator configuration (32x32 FP16 SA, one core,
 | Logit cosine similarity | 0.9999957 |
 
 The simulated cycle count is a simulator result, not measured silicon
-performance. Host wall time was about 30 minutes because the Rust functional
-emulator computes the tensor values in addition to analytical/transactional
-timing.
+performance. Host wall time was about 30 minutes, including tensor calculation,
+per-clock DRAMSim3 processing and per-transaction SRAM/NoC/event scheduling.
+That measurement alone does not identify the dominant component. Subsequent
+host performance probes and equivalent optimizations are documented in
+`PLENA_Simulator/transactional_emulator/docs/HOST_PERFORMANCE.md`.
+
+The optimized simulator was rerun on 2026-09-08. It completed the same full
+16-layer prefill plus LM head in 1631.333 s (27 min 11 s); compilation, execution
+and validation together took 1816.662 s (30 min 17 s). All 18 FP16 checkpoint
+tensors were bit-exact against the target golden. NPU cycles, next token and
+HF logit comparison match the results above. The successful run had no disk
+pause. This is approximately 9.4% less simulator wall time than the earlier
+recorded 1800.372 s run, not a kernel-speedup extrapolation.
+
+The complete new bundle is retained at
+`/home/jongjip/LP6/runs/llama32-1b-optimized-20260908-retry`, including
+`run_summary.json`, `execution.json`, `hf_comparison.json`, and target images,
+timing and SRAM dumps. The retry launcher compiles first and preserves the
+published inputs before executing Rust, and monitors free disk space.
 
 ## Important boundary
 

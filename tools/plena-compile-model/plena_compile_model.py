@@ -4,7 +4,7 @@
 The frontend captures the actual ``forward`` graph through torch.export and
 the official torch-mlir FX importer.  A fail-closed semantic certificate then
 authorizes the transitional dense-Llama backend, which packs checkpoint data
-and emits only generic PLENA Matrix/Vector/Scalar Program-v5 instructions.
+and emits only generic PLENA Matrix/Vector/Scalar Program-v7 instructions.
 """
 
 from __future__ import annotations
@@ -37,6 +37,27 @@ import plena_torch_frontend as frontend  # noqa: E402
 
 class ModelCompileError(RuntimeError):
     pass
+
+
+def _vpu_settings(path: Path) -> dict[str, Any]:
+    # torch-MLIR may use Python 3.10 while the ordinary config tools use 3.11+.
+    # Parse real TOML with the stdlib, never a partial regex/config approximation.
+    try:
+        import tomllib
+    except ModuleNotFoundError:
+        interpreter = os.environ.get('PLENA_CONFIG_PYTHON', 'python3')
+        result = subprocess.run(
+            [interpreter, str(SOURCE_ROOT / 'tools/import_simulator_config.py'),
+             str(path), '--vpu-only'], text=True, capture_output=True,
+        )
+        if result.returncode:
+            raise ModelCompileError(
+                'TOML parsing requires Python 3.11+; set PLENA_CONFIG_PYTHON.\n'
+                + result.stderr[-2000:]
+            )
+        return json.loads(result.stdout)
+    with path.open('rb') as stream:
+        return tomllib.load(stream)['TRANSACTIONAL']['VPU']
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -207,6 +228,12 @@ def compile_model(args: argparse.Namespace) -> Path:
     model = args.hf_model.resolve()
     if not model.is_dir() or not (model / "config.json").is_file():
         raise ModelCompileError(f"not a local Hugging Face model directory: {model}")
+    vpu_settings = _vpu_settings(args.simulator_settings)
+    if not 7 <= int(vpu_settings.get('vector_registers', 16)) <= 16:
+        raise ModelCompileError('dense decoder lowering requires 7..16 vector registers')
+    register_bits = int(vpu_settings.get('vector_register_bits', 512))
+    if register_bits < 32 or register_bits % 32:
+        raise ModelCompileError('vector_register_bits must be a positive multiple of 32')
     destination = args.output_dir.resolve()
     if destination.exists():
         raise ModelCompileError(f"output directory already exists: {destination}")
@@ -261,7 +288,7 @@ def compile_model(args: argparse.Namespace) -> Path:
         gc.collect()
 
         target_dir = staging / "target"
-        print(f"[3/4] emit PLENA Program v5 ({num_layers}/{total_layers} layers)", flush=True)
+        print(f"[3/4] emit PLENA Program v7 ({num_layers}/{total_layers} layers)", flush=True)
         backend.generate(
             model,
             args.prompt,
@@ -269,6 +296,7 @@ def compile_model(args: argparse.Namespace) -> Path:
             args.position_start,
             num_layers,
             num_layers == total_layers,
+            vector_register_bits=register_bits,
         )
 
         execution: dict[str, Any] | None = None
@@ -314,7 +342,7 @@ def compile_model(args: argparse.Namespace) -> Path:
             },
             "lowering": {
                 "kind": "graph-certified dense-Llama reference lowering",
-                "program_format": "PLENA unified Program v5",
+                "program_format": "PLENA unified Program v7",
                 "instructions": "generic Matrix/Vector/Scalar plus DMA/control",
                 "operation_driven_cpp_mlir_backend": False,
                 "note": (

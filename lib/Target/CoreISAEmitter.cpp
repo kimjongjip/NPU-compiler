@@ -132,24 +132,29 @@ CoreISAEmitter::emitMatmul(const CoreBlockPlan &plan) {
     emitL2Load(kWeightL1Register, kWeightL2Register, tile.n * 2, currentK,
                problem.n * 2, tile.n * 2);
 
-    setControl(4, tile.m);
-    setControl(5, tile.n);
-    setControl(6, currentK);
-    setControl(8, currentK);
-    setControl(9, tile.n);
-    setControl(10, tile.n);
     loadU32(kWeightL1Register, *weightL1);
     append(encodeRegister(kOpMatrixLoad, 0, kWeightL1Register, 0, 0, 3));
+    append(currentK);
+    append(tile.n);
+    append(tile.n * 2);
     loadU32(kActivationL1Register, *activationL1);
     append(
         encodeRegister(kOpMatrixLoad, 0, kActivationL1Register, 0, 0, 7));
-    append(kOpMatrixMma);
+    append(tile.m);
+    append(currentK);
+    append(currentK * 2);
+    append(kOpMatrixMma | (kOffset != 0 ? 1u << 26 : 0));
+    append(tile.m);
+    append(tile.n);
+    append(currentK);
   }
 
   loadU32(kOutputL1Register, *outputL1);
-  setControl(9, tile.n);
   append(kOpWaitMatrix);
   append(encodeRegister(kOpMatrixWriteoutF16, kOutputL1Register));
+  append(tile.m);
+  append(tile.n);
+  append(tile.n * 2);
 
   const uint64_t outputOffset =
       (uint64_t{tile.mOffset} * problem.n + tile.nOffset) * 2;

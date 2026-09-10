@@ -10,7 +10,7 @@ Rust emulator or predicts a fixed cycle count in ISA.
 ```text
 PLENA_Compiler                         PLENA_Simulator
 ------------------------------         -----------------------------
-linalg/semantic graph                  Program v5 parser
+linalg/semantic graph                  Program v7 parser
   -> tile and core partition             -> central command processor
   -> LP6/L2/L1 plan                       -> GDMA / NoC / LDMA
   -> command/event schedule               -> private L1 / Matrix / VPU
@@ -41,7 +41,7 @@ generation; the LP6 packer reads the real safetensors checkpoint.
 This path is executable but deliberately does not pretend to be native
 full-graph MLIR lowering. Its `compilation.json` records
 `operation_driven_cpp_mlir_backend: false`. The target program nevertheless
-uses only the same generic core ISA and unified Program v5 understood by the
+uses only the same generic core ISA and unified Program v7 understood by the
 Rust simulator.
 
 ### Input MLIR
@@ -119,7 +119,7 @@ the core word slice.
 
 ### `plena_isa`
 
-`plena_isa.program` owns the immutable Program v5 word stream and the three
+`plena_isa.program` owns the immutable Program v7 word stream and the three
 runtime/reporting documents. The driver writes each uint32 word little-endian.
 
 ## Matmul lowering
@@ -129,11 +129,9 @@ For each output tile `(m0, n0, Mt, Nt)` and each temporal K chunk:
 ```text
 L2_LOAD_STRIDED activation[m0:m0+Mt, k0:k0+Kt] -> compact L1
 L2_LOAD_STRIDED weight[k0:k0+Kt, n0:n0+Nt]      -> compact L1
-C_SET_TILE_M/N/K
-C_SET_MATRIX_*_STRIDE
-M_LOAD_WEIGHT_F16
-M_LOAD_ACT_F16
-M_MMA_F16F16F32
+M_LOAD_WEIGHT_F16 gpW, Kt, Nt, Nt*2
+M_LOAD_ACT_F16 gpA, Mt, Kt, Kt*2
+M_MMA_F16F16F32 Mt, Nt, Kt, INIT(first K chunk) or ACC
 ```
 
 All K chunks accumulate into one FP32 Matrix accumulator. The final chunk is
@@ -141,14 +139,14 @@ followed by:
 
 ```text
 C_WAIT_MATRIX
-M_WRITEOUT_F16 -> compact L1 output
+M_WRITEOUT_F16 gpOut, Mt, Nt, Nt*2 -> compact L1 output
 L2_STORE_STRIDED -> disjoint shared-L2 output slice
 ```
 
 This is output-stationary. K=96 with `k_chunk=64` therefore issues two MMAs
 with K=64 and K=32, not a cross-core reduction.
 
-## Program v5 mapping
+## Program v7 mapping
 
 The command sequence is:
 
@@ -167,6 +165,12 @@ uses `[1,0]` to test relocation. Changing placement does not rewrite core-local
 addresses because private L1 uses core-relative byte offsets.
 
 ## Configuration ownership
+
+The core GP namespace contains 16 ordinary writable u32 registers, including
+GP0. Constant materialization must not assume GP0 is zero. Both the C++ emitter
+and Python full-model encoder use LUI on the destination followed, when needed,
+by ADDI reading that same destination. The Python small-immediate GP0 shortcut
+was removed on 2026-09-09; existing compiled bundles are not rewritten.
 
 The target JSON contains compiler-relevant legality fields only. The helper
 `tools/import_simulator_config.py` derives array shape, core count, L1/L2 size,

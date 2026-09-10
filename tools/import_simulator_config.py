@@ -49,19 +49,26 @@ def normalized_config(
         "command_processor": {
             "completion_event_slots": int(command["completion_event_slots"])
         },
-        "isa": {"version": 5, "word_bits": 32, "address_unit": "byte"},
+        "isa": {"version": 7, "word_bits": 32, "address_unit": "byte"},
     }
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("settings", type=Path)
-    parser.add_argument("-o", "--output", type=Path, required=True)
+    parser.add_argument("-o", "--output", type=Path)
+    parser.add_argument("--vpu-only", action="store_true",
+                        help="print the VPU settings as JSON for older model Python environments")
     parser.add_argument("--logical-cores", type=int)
     parser.add_argument("--k-chunk", type=int, default=64)
     args = parser.parse_args()
     with args.settings.open("rb") as stream:
         settings = tomllib.load(stream)
+    if args.vpu_only:
+        print(json.dumps(settings['TRANSACTIONAL']['VPU']))
+        return
+    if args.output is None:
+        parser.error('--output is required unless --vpu-only is selected')
     config = normalized_config(
         settings, logical_cores=args.logical_cores, k_chunk=args.k_chunk
     )

@@ -3,7 +3,7 @@
 Standalone LLVM/MLIR compiler targeting the current PLENA NPU simulator.
 The project reuses the proven multi-level organization of the ETRI compiler,
 but its memory hierarchy, tiling, scheduling, command IR, and binary encoder
-are native to the PLENA Program v5 ABI.
+are native to the PLENA Program v7 ABI.
 
 Two executable paths are available:
 
@@ -21,7 +21,7 @@ local Hugging Face Llama checkpoint
   -> torch.export capture -> official torch-mlir Torch IR
   -> fail-closed graph/state/capability certificate
   -> dense-Llama reference lowering to generic PLENA ISA
-  -> Program v5 + LP6 image -> PLENA Rust simulator
+  -> Program v7 + LP6 image -> PLENA Rust simulator
 ```
 
 ## Current support
@@ -34,9 +34,12 @@ local Hugging Face Llama checkpoint
 - Contiguous N-axis partitioning across logical cores; K is never split.
 - Explicit LP6 to shared-L2 GDMA and per-core L2/L1 LDMA.
 - Core-relative private-L1 byte offsets and shared-L2 byte offsets.
-- Program v5 `CORE_BEGIN/CORE_END`, numeric dependencies, and configurable
+- Program v7 `CORE_BEGIN/CORE_END`, numeric dependencies, and configurable
   logical-to-physical placement.
 - Compiler bundle execution on the Rust simulator with FP16 byte-exact tests.
+- Bounded Vector ISA generation for the dense decoder: explicit tiles fit the
+  configured RF width; RMSNorm/softmax reductions use a scalar pairwise tree.
+  The current assignment requires at least seven vector registers (default 16).
 - Physically vendored PyTorch/torch-mlir graph frontend; no ETRI source import
   or frontend symlink is used at runtime.
 - Full supported Llama prefill through every decoder layer, final norm, and LM
@@ -98,7 +101,7 @@ The regression covers:
 - K=96 lowered as 64+32 temporal accumulation;
 - 1-core and 2-core N-axis placement;
 - round-trip parsing of every emitted MLIR level;
-- Rust simulator Program v5 decoding and exact FP16 output;
+- Rust simulator Program v7 decoding and exact FP16 output;
 - rejection of a matmul without zero initialization.
 - frontend source ownership/no-symlink checks and model-driver CLI smoke test.
 
@@ -106,14 +109,19 @@ Reference results in the checked configuration:
 
 | Problem | Cores | NPU cycles | Exact |
 |---|---:|---:|---:|
-| `4x64 x 64x64` | 1 | 1,443 | yes |
-| `4x64 x 64x64` | 2 | 923 | yes |
-| `5x96 x 96x37` | 1 | 2,035 | yes |
-| `5x96 x 96x37` | 2 | 1,464 | yes |
-| `40x33 x 33x45` | 1 | 5,051 | yes |
-| `40x33 x 33x45` | 2 | 3,149 | yes |
+| `4x64 x 64x64` | 1 | 1,320 | yes |
+| `4x64 x 64x64` | 2 | 860 | yes |
+| `5x96 x 96x37` | 1 | 1,810 | yes |
+| `5x96 x 96x37` | 2 | 1,326 | yes |
+| `40x33 x 33x45` | 1 | 3,517 | yes |
+| `40x33 x 33x45` | 2 | 2,248 | yes |
 
 These are simulator results for regression, not measured hardware performance.
+These are Program v7 results from 2026-09-10. The simulator uses atomic masked
+L2 writes, bounded LDMA write pipelining and continuous FP32 Matrix accumulation.
+Old v6 binaries must be regenerated. The native MLIR path still targets FP16
+matmul; typed Vector and Q4 lowering helpers are local Python backend APIs,
+not a claim that every new primitive has automatic graph legalization.
 
 ## Compile manually
 
@@ -156,7 +164,7 @@ python3 tools/import_simulator_config.py \
 | `scheduled.mlir` | GDMA/core-block event SSA |
 | `commands.mlir` | Structured GDMA and `CORE_BEGIN/END` records |
 | `lowered.mlir` | Immutable `plena_isa.program` |
-| `program.bin` | Simulator-executable unified Program v5 |
+| `program.bin` | Simulator-executable unified Program v7 |
 | `system.json` | Placement, L2 regions, command debug symbols |
 | `model_manifest.json` | Tensor shapes, LP6/L2 byte locations, output ABI |
 | `lp6.bin` | Activation and weight payload image |

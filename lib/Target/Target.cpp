@@ -1,5 +1,5 @@
 #include "PLENA/Target/Target.h"
-#include "PLENA/Target/ProgramV5.h"
+#include "PLENA/Target/ProgramV7.h"
 
 #include "llvm/ADT/Twine.h"
 #include "llvm/ADT/DenseSet.h"
@@ -140,8 +140,8 @@ llvm::Error TargetConfig::validate() const {
   if (completionEventSlots < 3)
     return llvm::createStringError(
         "completion_event_slots must hold two GDMA events and one core block");
-  if (isaVersion != kProgramV5Version)
-    return llvm::createStringError("only PLENA unified Program version 5 is supported");
+  if (isaVersion != kProgramV7Version)
+    return llvm::createStringError("only PLENA unified Program version 7 is supported");
   return llvm::Error::success();
 }
 
@@ -541,7 +541,7 @@ std::string plena::target::buildCompileReportJSON(
     placement.push_back(core);
   llvm::json::Object root{
       {"schema", "plena.compiler.report.v1"},
-      {"pipeline", "linalg_to_unified_program_v5"},
+      {"pipeline", "linalg_to_unified_program_v7"},
       {"problem", llvm::json::Object{{"m", problem.m},
                                      {"k", problem.k},
                                      {"n", problem.n}}},

@@ -1,7 +1,7 @@
-//===- ProgramV5.h - Unified PLENA Program v5 encoder --------*- C++ -*-===//
+//===- ProgramV7.h - Unified PLENA Program v7 encoder --------*- C++ -*-===//
 
-#ifndef PLENA_TARGET_PROGRAMV5_H
-#define PLENA_TARGET_PROGRAMV5_H
+#ifndef PLENA_TARGET_PROGRAMV7_H
+#define PLENA_TARGET_PROGRAMV7_H
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/Support/Error.h"
@@ -13,8 +13,8 @@
 
 namespace plena::target {
 
-constexpr uint32_t kProgramV5Magic = 0x354e4c50u;
-constexpr uint32_t kProgramV5Version = 5;
+constexpr uint32_t kProgramV7Magic = 0x374e4c50u;
+constexpr uint32_t kProgramV7Version = 7;
 constexpr uint32_t kNoneU32 = 0xffff'ffffu;
 
 struct GdmaLoadRecord {
@@ -48,25 +48,25 @@ struct CoreBlockRecord {
 
 using ProgramRecord = std::variant<GdmaLoadRecord, CoreBlockRecord>;
 
-struct ProgramV5Image {
+struct ProgramV7Image {
   std::vector<uint32_t> words;
   uint32_t commandCount = 0;
   uint32_t coreInstructionCount = 0;
 };
 
-llvm::Expected<ProgramV5Image>
-encodeProgramV5(llvm::ArrayRef<ProgramRecord> records,
+llvm::Expected<ProgramV7Image>
+encodeProgramV7(llvm::ArrayRef<ProgramRecord> records,
                 uint32_t completionEventSlots);
 
 std::string buildSystemManifestJSON(
-    const ProgramV5Image &image, llvm::ArrayRef<ProgramRecord> records,
+    const ProgramV7Image &image, llvm::ArrayRef<ProgramRecord> records,
     llvm::ArrayRef<uint32_t> logicalToPhysical, uint64_t l2BytesRequired,
     llvm::StringRef l2RegionsJSON);
 
 llvm::Expected<std::string>
 augmentCompileReportJSON(llvm::StringRef report,
-                         const ProgramV5Image &image);
+                         const ProgramV7Image &image);
 
 } // namespace plena::target
 
-#endif // PLENA_TARGET_PROGRAMV5_H
+#endif // PLENA_TARGET_PROGRAMV7_H

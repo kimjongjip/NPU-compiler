@@ -25,6 +25,7 @@ python3 "${COMPILER_ROOT}/tools/import_simulator_config.py" \
 cmp "${COMPILER_ROOT}/configs/plena32_single_core.json" \
   "${NORMALIZED_CONFIG}"
 python3 "${COMPILER_ROOT}/test/run_matmul_e2e.py"
+python3 "${COMPILER_ROOT}/test/test_core_immediates.py"
 
 if find "${COMPILER_ROOT}/tools/frontend" "${COMPILER_ROOT}/tools/full_model" \
     -type l -print -quit | grep -q .; then

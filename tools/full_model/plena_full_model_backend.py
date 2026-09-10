@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate/check a supported dense Llama decoder on PLENA Program v5.
+"""Generate/check a supported dense Llama decoder on PLENA Program v7.
 
 The default smoke test executes every prompt token through layer 0. Use
 ``--num-layers`` for a prefix, ``--with-lm-head`` for final norm/tied logits,
@@ -33,9 +33,11 @@ import torch
 from safetensors import safe_open
 from transformers import AutoTokenizer
 
-from program_v5 import SystemProgramBuilder
+from program_v7 import SystemProgramBuilder
+from bounded_vector_emitter import BoundedVectorEmitterMixin
 from plena_isa_encoding import (
     OP_C_SET_V2,
+    matrix_load, matrix_mma, matrix_writeout,
     OP_L2_DMA,
     OP_M_MMA,
     OP_M_WRITEOUT,
@@ -64,13 +66,7 @@ SRAM_NORM_WEIGHT_ADDRESS = SRAM_WEIGHT_REGION_BASE + 2 * SRAM_WEIGHT_BATCH_CAPAC
 
 # C_SET_V2 funct values.
 SET_VECTOR_ELEMENTS = 3
-SET_TILE_M = 4
-SET_TILE_N = 5
-SET_TILE_K = 6
 SET_DMA_BYTES = 7
-SET_MATRIX_ACTIVATION_STRIDE = 8
-SET_MATRIX_OUTPUT_STRIDE = 9
-SET_MATRIX_WEIGHT_STRIDE = 10
 OP_V_MEMORY = 0x35
 OP_M_LOAD = 0x37
 
@@ -280,15 +276,20 @@ def add_tiled_weight(lp6: Lp6Image, name: str, weight: torch.Tensor) -> TiledWei
     )
 
 
-class ProgramEmitter:
+class ProgramEmitter(BoundedVectorEmitterMixin):
     """Build unified GDMA and CORE_BEGIN/END records with core-local ISA."""
 
-    def __init__(self, output: Path) -> None:
+    def __init__(self, output: Path, *, vector_register_bytes: int = 64) -> None:
+        if vector_register_bytes < 4 or vector_register_bytes % 4:
+            raise ValueError("invalid vector register byte capacity")
+        self.vector_register_bytes = vector_register_bytes
         self.program = SystemProgramBuilder(output)
         self.word_count = 0
         self.config: dict[int, int] = {}
+        self._matrix_accumulate = False
+        self._matrix_shape = (0, 0)
 
-    def emit(self, word: int) -> None:
+    def emit(self, word: int | list[int]) -> None:
         self.program.append(word)
 
     def emit_many(self, words: Iterable[int]) -> None:
@@ -341,65 +342,6 @@ class ProgramEmitter:
         assert elements > 0
         self.set_config(SET_VECTOR_ELEMENTS, elements)
 
-    def vector_binary(
-        self, destination: int, lhs: int, rhs: int, elements: int, funct: int
-    ) -> None:
-        self.set_vector_elements(elements)
-        self.load(3, destination)
-        self.load(4, lhs)
-        self.load(5, rhs)
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=4, funct=1))
-        self.emit(rform(OP_V_MEMORY, rd=1, rs1=5, funct=1))
-        self.emit(rform(OP_V_BINARY_F16, rd=2, rs1=0, rs2=1, funct=funct))
-        self.emit(rform(OP_V_MEMORY, rd=3, rs1=2, funct=2))
-
-    def vector_unary(
-        self, destination: int, source: int, elements: int, funct: int
-    ) -> None:
-        self.set_vector_elements(elements)
-        self.load(3, destination)
-        self.load(4, source)
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=4, funct=1))
-        self.emit(rform(OP_V_UNARY_F16, rd=1, rs1=0, funct=funct))
-        self.emit(rform(OP_V_MEMORY, rd=3, rs1=1, funct=2))
-
-    def vector_scalar(
-        self, destination: int, source: int, scalar: int, elements: int, funct: int
-    ) -> None:
-        self.set_vector_elements(elements)
-        self.load(3, destination)
-        self.load(4, source)
-        self.load(5, scalar)
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=4, funct=1))
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=5, funct=9))
-        self.emit(rform(OP_V_SCALAR_F16, rd=1, rs1=0, rs2=0, funct=funct))
-        self.emit(rform(OP_V_MEMORY, rd=3, rs1=1, funct=2))
-
-    def vector_reduce(
-        self,
-        destination: int,
-        source: int,
-        elements: int,
-        funct: int,
-        rhs: int = 0,
-    ) -> None:
-        self.set_vector_elements(elements)
-        self.load(3, destination)
-        self.load(4, source)
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=4, funct=1 if funct <= 3 else 3))
-        if funct == 3:
-            self.load(5, rhs)
-            self.emit(rform(OP_V_MEMORY, rd=1, rs1=5, funct=1))
-        self.emit(
-            rform(
-                OP_V_REDUCE,
-                rd=0,
-                rs1=0,
-                rs2=1 if funct == 3 else 0,
-                funct=funct,
-            )
-        )
-        self.emit(rform(OP_V_MEMORY, rd=3, rs1=0, funct=10))
 
     def scalar_f32(
         self, destination: int, lhs: int, funct: int, rhs: int = 0
@@ -441,137 +383,6 @@ class ProgramEmitter:
     def vector_add(self, destination: int, lhs: int, rhs: int, elements: int) -> None:
         self.vector_binary(destination, lhs, rhs, elements, 1)
 
-    def rmsnorm(
-        self,
-        destination: int,
-        source: int,
-        weight: int,
-        rows: int,
-        columns: int,
-        temp: int,
-        sum_scalar: int,
-        inverse_scalar: int,
-        inverse_columns: int,
-        epsilon: int,
-    ) -> None:
-        self.load(11, inverse_columns)
-        self.load(12, epsilon)
-        self.emit(rform(OP_V_MEMORY, rd=1, rs1=11, funct=9))
-        self.emit(rform(OP_V_MEMORY, rd=2, rs1=12, funct=9))
-        for row in range(rows):
-            source_row = source + row * columns * 2
-            destination_row = destination + row * columns * 2
-            self.set_vector_elements(columns)
-            self.load(3, source_row)
-            self.load(4, weight)
-            self.load(5, destination_row)
-            self.emit(rform(OP_V_MEMORY, rd=0, rs1=3, funct=1))
-            self.emit(rform(OP_V_REDUCE, rd=0, rs1=0, rs2=0, funct=3))
-            self.emit(rform(OP_S_ALU_F32, rd=0, rs1=0, rs2=1, funct=3))
-            self.emit(rform(OP_S_ALU_F32, rd=0, rs1=0, rs2=2, funct=1))
-            self.emit(rform(OP_S_ALU_F32, rd=0, rs1=0, funct=8))
-            self.emit(rform(OP_V_MEMORY, rd=1, rs1=4, funct=1))
-            self.emit(rform(OP_V_SCALAR_F16, rd=2, rs1=0, rs2=0, funct=3))
-            self.emit(rform(OP_V_BINARY_F16, rd=2, rs1=2, rs2=1, funct=3))
-            self.emit(rform(OP_V_MEMORY, rd=5, rs1=2, funct=2))
-
-    def silu_mul(
-        self,
-        destination: int,
-        gate: int,
-        up: int,
-        elements: int,
-        temp: int,
-        one: int,
-    ) -> None:
-        self.set_vector_elements(elements)
-        self.load(3, destination)
-        self.load(4, gate)
-        self.load(5, up)
-        self.load(6, one)
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=4, funct=1))
-        self.emit(rform(OP_V_MEMORY, rd=1, rs1=5, funct=1))
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=6, funct=9))
-        self.emit(rform(OP_V_UNARY_F16, rd=2, rs1=0, funct=1))
-        self.emit(rform(OP_V_UNARY_F16, rd=2, rs1=2, funct=2))
-        self.emit(rform(OP_V_SCALAR_F16, rd=2, rs1=2, rs2=0, funct=1))
-        self.emit(rform(OP_V_UNARY_F16, rd=2, rs1=2, funct=3))
-        self.emit(rform(OP_V_BINARY_F16, rd=2, rs1=0, rs2=2, funct=3))
-        self.emit(rform(OP_V_BINARY_F16, rd=2, rs1=2, rs2=1, funct=3))
-        self.emit(rform(OP_V_MEMORY, rd=3, rs1=2, funct=2))
-
-    def rope(
-        self,
-        destination: int,
-        source: int,
-        rows: int,
-        heads: int,
-        head_dim: int,
-        sine: int,
-        cosine: int,
-        temp_a: int,
-        temp_b: int,
-    ) -> None:
-        assert head_dim % 2 == 0
-        half = head_dim // 2
-        row_width = heads * head_dim
-        for row in range(rows):
-            sine_row = sine + row * half * 2
-            cosine_row = cosine + row * half * 2
-            for head in range(heads):
-                base = source + (row * row_width + head * head_dim) * 2
-                output = destination + (row * row_width + head * head_dim) * 2
-                first = base
-                second = base + half * 2
-                self.set_vector_elements(half)
-                for register, address in enumerate(
-                    [first, second, cosine_row, sine_row, output, output + half * 2],
-                    start=3,
-                ):
-                    self.load(register, address)
-                self.emit(rform(OP_V_MEMORY, rd=0, rs1=3, funct=1))
-                self.emit(rform(OP_V_MEMORY, rd=1, rs1=4, funct=1))
-                self.emit(rform(OP_V_MEMORY, rd=2, rs1=5, funct=1))
-                self.emit(rform(OP_V_MEMORY, rd=3, rs1=6, funct=1))
-                self.emit(rform(OP_V_BINARY_F16, rd=4, rs1=0, rs2=2, funct=3))
-                self.emit(rform(OP_V_BINARY_F16, rd=5, rs1=1, rs2=3, funct=3))
-                self.emit(rform(OP_V_BINARY_F16, rd=6, rs1=4, rs2=5, funct=2))
-                self.emit(rform(OP_V_MEMORY, rd=7, rs1=6, funct=2))
-                self.emit(rform(OP_V_BINARY_F16, rd=4, rs1=1, rs2=2, funct=3))
-                self.emit(rform(OP_V_BINARY_F16, rd=5, rs1=0, rs2=3, funct=3))
-                self.emit(rform(OP_V_BINARY_F16, rd=6, rs1=4, rs2=5, funct=1))
-                self.emit(rform(OP_V_MEMORY, rd=8, rs1=6, funct=2))
-
-    def softmax(
-        self,
-        destination: int,
-        scores: int,
-        elements: int,
-        temp_a: int,
-        temp_b: int,
-        maximum: int,
-        total: int,
-        reciprocal: int,
-        scale: int | None = None,
-    ) -> None:
-        self.set_vector_elements(elements)
-        self.load(3, scores)
-        self.load(4, temp_b)
-        self.load(5, destination)
-        self.emit(rform(OP_V_MEMORY, rd=0, rs1=3, funct=1))
-        if scale is not None:
-            self.load(6, scale)
-            self.emit(rform(OP_V_MEMORY, rd=3, rs1=6, funct=9))
-            self.emit(rform(OP_V_SCALAR_F16, rd=0, rs1=0, rs2=3, funct=3))
-        self.emit(rform(OP_V_REDUCE, rd=0, rs1=0, funct=2))
-        self.emit(rform(OP_V_SCALAR_F16, rd=1, rs1=0, rs2=0, funct=2))
-        self.emit(rform(OP_V_UNARY_F16, rd=1, rs1=1, funct=2))
-        self.emit(rform(OP_V_MEMORY, rd=4, rs1=1, funct=2))
-        self.emit(rform(OP_V_MEMORY, rd=2, rs1=4, funct=1))
-        self.emit(rform(OP_V_REDUCE, rd=1, rs1=2, funct=1))
-        self.emit(rform(OP_S_ALU_F32, rd=1, rs1=1, funct=6))
-        self.emit(rform(OP_V_SCALAR_F16, rd=2, rs1=2, rs2=1, funct=3))
-        self.emit(rform(OP_V_MEMORY, rd=5, rs1=2, funct=2))
 
     def attention(
         self,
@@ -670,21 +481,22 @@ class ProgramEmitter:
         assert activation_row_stride >= k
         weight_row_stride = n if weight_row_stride is None else weight_row_stride
         assert weight_row_stride >= n
-        self.set_config(SET_TILE_M, m)
-        self.set_config(SET_TILE_N, n)
-        self.set_config(SET_TILE_K, k)
-        self.set_config(SET_MATRIX_WEIGHT_STRIDE, weight_row_stride)
-        self.set_config(SET_MATRIX_ACTIVATION_STRIDE, activation_row_stride)
         self.load(7, weight)
         self.load(8, activation)
-        self.emit(rform(OP_M_LOAD, rs1=7, funct=3))
-        self.emit(rform(OP_M_LOAD, rs1=8, funct=7))
-        self.emit(rform(OP_M_MMA, funct=3))
+        if self._matrix_accumulate:
+            assert self._matrix_shape == (m, n), "live Matrix accumulator shape changed"
+        self.emit(matrix_load(7, k, n, weight_row_stride * 2, funct=3))
+        self.emit(matrix_load(8, m, k, activation_row_stride * 2, funct=7))
+        self.emit(matrix_mma(m, n, k, funct=3, accumulate=self._matrix_accumulate))
+        self._matrix_accumulate = True
+        self._matrix_shape = (m, n)
 
     def matrix_write_f16(self, destination: int, output_row_stride: int) -> None:
-        self.set_config(SET_MATRIX_OUTPUT_STRIDE, output_row_stride)
         self.load(9, destination)
-        self.emit(rform(OP_M_WRITEOUT, rd=9, funct=1))
+        assert self._matrix_accumulate
+        m, n = self._matrix_shape
+        self.emit(matrix_writeout(9, m, n, output_row_stride * 2, funct=1))
+        self._matrix_accumulate = False
 
 
 def emit_linear(
@@ -751,11 +563,8 @@ def sequential_linear_f16(x: torch.Tensor, weight: torch.Tensor) -> torch.Tensor
     output_features, weight_input = weight.shape
     assert input_features == weight_input and input_features % K_TILE == 0
     accumulator = torch.zeros(rows, output_features, dtype=torch.float32)
-    for k_start in range(0, input_features, K_TILE):
-        partial = torch.zeros_like(accumulator)
-        for k in range(k_start, k_start + K_TILE):
-            partial.add_(x[:, k : k + 1] * weight[None, :, k])
-        accumulator.add_(partial)
+    for k in range(input_features):
+        accumulator.add_(x[:, k : k + 1] * weight[None, :, k])
     return round_f16(accumulator)
 
 
@@ -1221,6 +1030,7 @@ def generate(
     position_start: int,
     num_layers: int,
     with_lm_head: bool,
+    vector_register_bits: int = 512,
 ) -> None:
     output.mkdir(parents=True, exist_ok=True)
     config = json.loads((model_dir / "config.json").read_text(encoding="utf-8"))
@@ -1303,7 +1113,10 @@ def generate(
     )
 
     lp6 = Lp6Image(output / "lp6.bin")
-    emitter = ProgramEmitter(output)
+    register_bits = vector_register_bits
+    if register_bits < 32 or register_bits % 32:
+        raise ValueError("vector-register-bits must be a positive multiple of 32")
+    emitter = ProgramEmitter(output, vector_register_bytes=register_bits // 8)
     scalar_constants = {
         "scalar_one": 1.0,
         "scalar_epsilon": epsilon,
@@ -1668,6 +1481,8 @@ def main() -> None:
     )
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--atol", type=float, default=0.05)
+    parser.add_argument("--vector-register-bits", type=int, default=512,
+                        help="fixed register capacity used for explicit vector tiling")
     args = parser.parse_args()
     if args.check:
         check(args.output, args.atol)
@@ -1681,6 +1496,7 @@ def main() -> None:
             args.position_start,
             num_layers,
             args.with_lm_head or args.full_model,
+            args.vector_register_bits,
         )
 
 
