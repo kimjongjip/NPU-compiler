@@ -3,6 +3,8 @@ set -euo pipefail
 export PYTHONDONTWRITEBYTECODE=1
 
 PLENA_COMPILER_SOURCE="@PLENA_SOURCE_DIR@"
+export TMPDIR="${PLENA_COMPILER_SOURCE}/../tmp"
+mkdir -p -- "${TMPDIR}"
 if [[ -n "${PLENA_TORCH_MLIR_PYTHON:-}" ]]; then
   PLENA_MODEL_PYTHON=${PLENA_TORCH_MLIR_PYTHON}
 elif [[ -x /data2/jongjip/etri-mlir/compiler/tools/third_party/torch-mlir/.venv/bin/python ]]; then

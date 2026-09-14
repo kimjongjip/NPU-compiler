@@ -38,4 +38,13 @@ def PLENACommand_CoreBlockOp : PLENACommand_Op<"core_block"> {
                        DenseI32ArrayAttr:$core_words);
 }
 
+def PLENACommand_GdmaStoreOp : PLENACommand_Op<"gdma_store"> {
+  let summary = "Explicit shared-L2 to LP6 spill/writeback";
+  let arguments = (ins StrAttr:$name, I64Attr:$event,
+                       DenseI32ArrayAttr:$dependencies,
+                       I64Attr:$lp6_address, I64Attr:$l2_address,
+                       I64Attr:$row_bytes, I64Attr:$rows,
+                       I64Attr:$lp6_stride, I64Attr:$l2_stride);
+}
+
 #endif // PLENA_DIALECT_COMMAND_COMMANDOPS_TD

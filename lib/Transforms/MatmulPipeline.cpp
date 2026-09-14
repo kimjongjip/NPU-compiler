@@ -571,6 +571,18 @@ public:
     for (Operation &operation : module.getBody()->getOperations()) {
       if (&operation == metadata.getOperation())
         continue;
+      if (auto gdma = dyn_cast<plena_cmd::GdmaStoreOp>(operation)) {
+        records.push_back(GdmaLoadRecord{
+            gdma.getName().str(), static_cast<uint32_t>(gdma.getEvent()),
+            unsignedWords(gdma.getDependencies()),
+            static_cast<uint64_t>(gdma.getLp6Address()),
+            static_cast<uint64_t>(gdma.getL2Address()),
+            static_cast<uint32_t>(gdma.getRowBytes()),
+            static_cast<uint32_t>(gdma.getRows()),
+            static_cast<uint32_t>(gdma.getLp6Stride()),
+            static_cast<uint32_t>(gdma.getL2Stride()), true});
+        continue;
+      }
       if (auto gdma = dyn_cast<plena_cmd::GdmaLoadOp>(operation)) {
         records.push_back(GdmaLoadRecord{
             gdma.getName().str(), static_cast<uint32_t>(gdma.getEvent()),

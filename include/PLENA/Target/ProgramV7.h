@@ -27,6 +27,7 @@ struct GdmaLoadRecord {
   uint32_t rows = 1;
   uint32_t lp6Stride = 0;
   uint32_t l2Stride = 0;
+  bool store = false;
 };
 
 struct L1RegionRecord {

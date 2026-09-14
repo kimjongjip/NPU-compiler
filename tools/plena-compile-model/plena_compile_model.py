@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Compile a supported local Hugging Face decoder into a PLENA bundle.
+"""Compile a complete local Hugging Face forward through MLIR to Program v7.
 
-The frontend captures the actual ``forward`` graph through torch.export and
-the official torch-mlir FX importer.  A fail-closed semantic certificate then
-authorizes the transitional dense-Llama backend, which packs checkpoint data
-and emits only generic PLENA Matrix/Vector/Scalar Program-v7 instructions.
+The default backend consumes official Linalg IR operation-by-operation.
+The historical model-specialized generator requires --backend reference and
+is never selected automatically when graph legalization fails.
 """
 
 from __future__ import annotations
@@ -25,10 +24,15 @@ from typing import Any, Sequence
 
 
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
+PROJECT_TMP = SOURCE_ROOT.parent / "tmp"
+PROJECT_TMP.mkdir(parents=True, exist_ok=True)
+os.environ["TMPDIR"] = str(PROJECT_TMP)
+tempfile.tempdir = str(PROJECT_TMP)
 FRONTEND_ROOT = SOURCE_ROOT / "tools" / "frontend"
 FULL_MODEL_ROOT = SOURCE_ROOT / "tools" / "full_model"
 for source_directory in (FRONTEND_ROOT, FULL_MODEL_ROOT):
     sys.path.insert(0, str(source_directory))
+sys.path.insert(0, str(SOURCE_ROOT / "tools"))
 
 import plena_full_model_backend as backend  # noqa: E402
 import plena_semantic_bridge as bridge  # noqa: E402
@@ -225,6 +229,9 @@ def _compare_huggingface(model_dir: Path, prompt: str, target: Path) -> dict[str
 
 
 def compile_model(args: argparse.Namespace) -> Path:
+    if args.backend == "mlir":
+        from graph_pipeline.model_driver import compile_model as compile_graph
+        return compile_graph(args, frontend, _run_simulator, SOURCE_ROOT)
     model = args.hf_model.resolve()
     if not model.is_dir() or not (model / "config.json").is_file():
         raise ModelCompileError(f"not a local Hugging Face model directory: {model}")
@@ -378,16 +385,22 @@ def _default_settings() -> Path:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Capture, certify, lower, and optionally execute a local Hugging Face Llama model"
+        description="Compile a complete local Hugging Face forward through MLIR passes and optionally execute it"
     )
     parser.add_argument("--hf-model", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--prompt", default="The capital of France is")
     parser.add_argument("--position-start", type=int, default=0)
+    parser.add_argument("--backend", choices=("mlir", "reference"), default="mlir",
+                        help="operation-driven MLIR pipeline (default), or explicit old Llama reference generator")
+    parser.add_argument("--logical-cores", type=int)
+    parser.add_argument("--k-chunk", type=int, default=64)
+    parser.add_argument("--graph-atol", type=float, default=0.002)
+    parser.add_argument("--graph-rtol", type=float, default=0.02)
     parser.add_argument(
         "--frontend-load-mode",
         choices=("config-fake", "config-cpu", "pretrained-cpu"),
-        default="config-fake",
+        default="pretrained-cpu",
     )
     parser.add_argument("--num-layers", type=int)
     parser.add_argument("--allow-partial-model", action="store_true")

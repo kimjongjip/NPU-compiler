@@ -1,5 +1,6 @@
 #include "PLENA/Dialect/Command/CommandDialect.h"
 #include "PLENA/Dialect/ISA/ISADialect.h"
+#include "PLENA/Dialect/Graph/GraphDialect.h"
 #include "PLENA/Dialect/Memory/MemoryDialect.h"
 #include "PLENA/Dialect/Schedule/ScheduleDialect.h"
 #include "PLENA/Dialect/Tile/TileDialect.h"
@@ -21,6 +22,7 @@ int main(int argc, char **argv) {
                   mlir::linalg::LinalgDialect, mlir::memref::MemRefDialect,
                   mlir::plena_cmd::PLENACommandDialect,
                   mlir::plena_isa::PLENAISADialect,
+                  mlir::plena_graph::PLENAGraphDialect,
                   mlir::plena_mem::PLENAMemoryDialect,
                   mlir::plena_sched::PLENAScheduleDialect,
                   mlir::plena_tile::PLENATileDialect>();

@@ -21,8 +21,20 @@ linalg/semantic graph                  Program v7 parser
 
 ## Full-model frontend boundary
 
-`plena-compile-model` owns a separate model-level path while the native MLIR
-passes are expanded beyond matmul:
+Since 2026-09-14, the default `plena-compile-model` path is:
+
+```text
+Hugging Face complete forward (FP16 checkpoint bindings)
+  -> torch.export -> official Torch/Linalg MLIR
+  -> plena_graph legalization / memory / tiling / scheduling
+  -> plena_cmd -> native C++ Program v7 encoder
+```
+
+Graph passes use Python MLIR IR transformations with native registered-dialect
+verification; command encoding is C++. See [GRAPH_COMPILER.md](GRAPH_COMPILER.md)
+for precise implementation boundaries, tests and remaining limitations.
+
+The following older model-level path now requires `--backend reference`:
 
 ```text
 Hugging Face module + fake capture tensors
@@ -44,7 +56,7 @@ full-graph MLIR lowering. Its `compilation.json` records
 uses only the same generic core ISA and unified Program v7 understood by the
 Rust simulator.
 
-### Input MLIR
+### Single-matmul native-driver input MLIR
 
 The initial frontend accepts one standard buffer-form operation:
 

@@ -1,5 +1,20 @@
 # Full Hugging Face model path
 
+## Current default versus historical results
+
+**2026-09-14:** The default is now the operation-driven MLIR graph compiler,
+documented in [GRAPH_COMPILER.md](GRAPH_COMPILER.md). It was validated on an
+entire small 2-layer Hugging Face model and LM head, on 1/2 cores. The trained
+Llama-3.2-1B checkpoint has not been validated with this new backend.
+
+Everything below describes the **historical reference backend**, now selected
+explicitly using `--backend reference`. Its old full-model accuracy and cycle
+results do not establish correctness or performance of the new MLIR graph path.
+New temporary artifacts are stored under `/home/jongjip/LP6/tmp`; old `/tmp`
+paths below are historical records, not defaults for new runs.
+
+## Historical reference-backend validation
+
 Current Program v7 validation: 2026-09-10, actual Llama-3.2-1B layer 0,
 six prompt tokens, all 16 FP16 checkpoints bit-exact with atol=0.
 Continuous per-K FP32 reference accumulation matches the revised Matrix contract.

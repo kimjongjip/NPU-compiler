@@ -4,9 +4,11 @@ export PYTHONDONTWRITEBYTECODE=1
 
 COMPILER_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 LP6_ROOT=$(cd -- "${COMPILER_ROOT}/.." && pwd)
+export TMPDIR="${LP6_ROOT}/tmp"
+mkdir -p -- "${TMPDIR}"
 MLIR_BUILD=${PLENA_MLIR_BUILD:-/home/jongjip/etri-mlir/third_party/torch-mlir/build-llvm}
 SIMULATOR_ROOT=${PLENA_SIMULATOR_ROOT:-${LP6_ROOT}/PLENA_Simulator}
-NORMALIZED_CONFIG=$(mktemp /tmp/plena-compiler-config.XXXXXX.json)
+NORMALIZED_CONFIG=$(mktemp "${TMPDIR}/plena-compiler-config.XXXXXX.json")
 trap 'rm -f -- "${NORMALIZED_CONFIG}"' EXIT
 
 cmake -S "${COMPILER_ROOT}" -B "${COMPILER_ROOT}/build" -G Ninja \
@@ -38,3 +40,11 @@ if rg -n '/data2/jongjip/etri-mlir/compiler/(tools|examples)' \
   exit 1
 fi
 "${COMPILER_ROOT}/build/bin/plena-compile-model" --help >/dev/null
+
+# Opt in to torch/torch-MLIR-dependent full-graph integration tests.
+if [[ "${PLENA_TEST_GRAPH:-0}" == 1 ]]; then
+  : "${PLENA_TORCH_MLIR_PYTHON:?set the torch-MLIR Python for graph integration tests}"
+  "${PLENA_TORCH_MLIR_PYTHON}" "${COMPILER_ROOT}/test/test_graph_validation.py"
+  "${PLENA_TORCH_MLIR_PYTHON}" "${COMPILER_ROOT}/test/run_graph_e2e.py" --cores 2
+  "${PLENA_TORCH_MLIR_PYTHON}" "${COMPILER_ROOT}/test/run_hf_graph_cli.py"
+fi

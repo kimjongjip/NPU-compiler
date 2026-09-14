@@ -1,0 +1,2 @@
+add_mlir_dialect(GraphOps plena_graph)
+

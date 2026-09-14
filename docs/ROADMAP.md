@@ -1,5 +1,23 @@
 # PLENA compiler roadmap
 
+## 2026-09-14 graph-pipeline update
+
+The default full-model path now consumes official Linalg IR operation-by-operation
+through graph legalization, lifetime-aware memory planning, SA/VPU tiling,
+multicore event scheduling, command lowering and native Program v7 encoding.
+Weights stream from LP6; intermediate L2 overflow emits explicit spills/reloads.
+See [GRAPH_COMPILER.md](GRAPH_COMPILER.md) for validated scope and remaining work.
+
+Graph transformations are Python MLIR passes, not all native C++ patterns.
+Outstanding priorities: larger-model command/event scalability, richer graph IR,
+fusion/prefetch, output staging, broader numerical validation and stateful decode.
+The old 1B reference-backend results are not validation of this new graph path.
+
+The earlier milestones below are retained as historical context. Items about
+connecting a full imported graph and basic L2 lifetime/spill planning have now
+been implemented in the new baseline, but their optimization/native-C++ portions
+remain open.
+
 ## Implemented baseline
 
 - Standalone LLVM/MLIR 24 project and `plena-opt` driver.

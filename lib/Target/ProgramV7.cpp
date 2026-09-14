@@ -78,7 +78,7 @@ plena::target::encodeProgramV7(llvm::ArrayRef<ProgramRecord> records,
           gdma->lp6Stride < gdma->rowBytes ||
           gdma->l2Stride < gdma->rowBytes)
         return llvm::createStringError("invalid GDMA load dimensions");
-      image.words.push_back(kGdmaLoad);
+      image.words.push_back(gdma->store ? 0x2c : kGdmaLoad);
       image.words.push_back(gdma->event);
       image.words.push_back(static_cast<uint32_t>(gdma->dependencies.size()));
       appendU64(image.words, gdma->lp6Address);

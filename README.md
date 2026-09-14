@@ -5,7 +5,11 @@ The project reuses the proven multi-level organization of the ETRI compiler,
 but its memory hierarchy, tiling, scheduling, command IR, and binary encoder
 are native to the PLENA Program v7 ABI.
 
-Two executable paths are available:
+The default full-model compiler now uses the imported MLIR operation graph.
+See [the graph compiler](docs/GRAPH_COMPILER.md) for pass implementations,
+validation and limitations. The small native matmul driver remains available.
+
+Two entry paths are available:
 
 ```text
 static FP16 linalg.fill + linalg.matmul
@@ -17,14 +21,15 @@ static FP16 linalg.fill + linalg.matmul
   -> unified 32-bit program.bin
   -> PLENA Rust simulator
 
-local Hugging Face Llama checkpoint
-  -> torch.export capture -> official torch-mlir Torch IR
-  -> fail-closed graph/state/capability certificate
-  -> dense-Llama reference lowering to generic PLENA ISA
+local Hugging Face checkpoint (default --backend mlir)
+  -> torch.export capture -> official Torch -> Linalg MLIR
+  -> graph legalization -> lifetime-aware LP6/L2/L1 planning
+  -> SA/VPU tiling -> logical-core/event scheduling
+  -> command MLIR -> native C++ Program v7 encoding
   -> Program v7 + LP6 image -> PLENA Rust simulator
 ```
 
-## Current support
+## Native single-matmul support
 
 - Exactly one static identity-layout `FP16` `linalg.matmul`.
 - Canonical `[M,K] x [K,N] -> [M,N]` row-major layout.
@@ -45,12 +50,18 @@ local Hugging Face Llama checkpoint
 - Full supported Llama prefill through every decoder layer, final norm, and LM
   head, with Rust SRAM/logit checking and optional Hugging Face eager comparison.
 
-The native C++ MLIR backend still accepts one matmul and requires its complete
-activation, weight, and output to fit the 8 MiB shared L2. The full-model path
-is intentionally identified as a graph-certified, model-specialized reference
-lowering: it emits generic Matrix/Vector/Scalar ISA, but it is not yet a
-general operation-by-operation Torch/Linalg-to-PLENA pass pipeline. This
-boundary is recorded in every `compilation.json` rather than hidden.
+The small `plena-compile` C++ driver retains its one-matmul/L2-fit restriction.
+The default `plena-compile-model` instead uses operation-driven graph passes,
+streams weights, reuses L2 by lifetime and spills intermediates when necessary.
+Graph transformations use Python MLIR bindings and registered `plena_graph`
+operations; final command encoding is a native C++ MLIR pass. Not all graph
+passes are native C++ rewrite patterns. The old model-specialized backend is
+available only with `--backend reference`; unsupported graphs never fall back.
+
+New-path validation covers a complete **small, random 2-layer HF Llama model**
+with LM head on 1/2 cores, generic non-Llama operations, and explicit L2 spills.
+The old trained 1B checkpoint has **not** been rerun through the new graph path.
+This is a functional baseline, not yet an arbitrary-model optimizing compiler.
 
 ## Build
 
@@ -69,23 +80,24 @@ cmake --build build --target plena-compile plena-opt -- -j4
 
 ## Compile and execute a Hugging Face model
 
-The model directory must be local. The default compiles every layer, final
-RMSNorm, and LM head, executes the Rust simulator, and compares the next-token
-logits with Hugging Face FP16 eager execution:
+The model directory must be local. The default compiles the entire forward,
+including all layers and the LM head. `--execute` runs the simulator and checks
+all returned logits against HF FP16 eager execution with explicit tolerances:
 
 ```bash
 build/bin/plena-compile-model \
   --hf-model /home/jongjip/models/llama_3.2_1b_instruct \
   --prompt "The capital of France is" \
-  --output-dir /tmp/plena-llama32-1b \
+  --output-dir /home/jongjip/LP6/tmp/plena-llama32-1b \
   --execute
 ```
 
 The wrapper uses `PLENA_TORCH_MLIR_PYTHON` when set. On this server it otherwise
 selects the pinned torch-mlir Python under `/data2/jongjip/etri-mlir`. That is a
 binary Python/toolchain dependency, not a source-code link. See
-[full-model E2E](docs/FULL_MODEL_E2E.md) for ownership, artifacts, results, and
-current restrictions.
+[graph compiler](docs/GRAPH_COMPILER.md) for current behavior. The older
+[full-model E2E](docs/FULL_MODEL_E2E.md) records reference-backend history.
+New temporary files use the project-local `../tmp` directory.
 
 ## Test
 
