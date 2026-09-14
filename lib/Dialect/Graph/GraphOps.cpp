@@ -76,4 +76,3 @@ LogicalResult ReduceOp::verify() { return verifyDescriptor(*this); }
 LogicalResult ReturnOp::verify() { return verifyDescriptor(*this); }
 LogicalResult TileOp::verify() { return verifyDescriptor(*this); }
 LogicalResult ScheduledTileOp::verify() { return verifyDescriptor(*this); }
-

@@ -17,4 +17,3 @@ def PLENAGraph_TileOp : PLENAGraph_Op<"tile"> {
 def PLENAGraph_ScheduledTileOp : PLENAGraph_Op<"scheduled_tile"> {
   let arguments = (ins StrAttr:$descriptor);
 }
-

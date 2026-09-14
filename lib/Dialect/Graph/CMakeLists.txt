@@ -3,4 +3,3 @@ add_mlir_dialect_library(MLIRPLENAGraph
   DEPENDS MLIRGraphOpsIncGen
   LINK_LIBS PUBLIC MLIRIR MLIRSupport
 )
-

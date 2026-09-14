@@ -9,4 +9,3 @@ void PLENAGraphDialect::initialize() {
 #include "PLENA/Dialect/Graph/GraphOps.cpp.inc"
   >();
 }
-

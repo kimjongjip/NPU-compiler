@@ -7,4 +7,3 @@ def PLENAGraph_Dialect : Dialect {
 class PLENAGraph_Op<string mnemonic> : Op<PLENAGraph_Dialect, mnemonic> {
   let hasVerifier = 1;
 }
-

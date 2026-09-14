@@ -9,4 +9,3 @@
 #define GET_OP_CLASSES
 #include "PLENA/Dialect/Graph/GraphOps.h.inc"
 #endif
-
