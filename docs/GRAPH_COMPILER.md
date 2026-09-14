@@ -1,5 +1,10 @@
 # Operation-driven graph compiler — 2026-09-14
 
+**Migration handoff:** [RESUME_CPP_COMPILER.md](RESUME_CPP_COMPILER.md) records
+the next native C++ implementation plan. The `NativeGraph*` draft files are
+not built or tested. This document describes the still-active Python MLIR
+baseline, not a completed C++ migration.
+
 The default `build/bin/plena-compile-model` now compiles the actual imported
 operation graph. It no longer validates a graph and then generates an unrelated
 fixed Llama instruction sequence. `--backend reference` explicitly selects the

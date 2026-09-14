@@ -1,5 +1,9 @@
 # PLENA MLIR Compiler
 
+**새 서버에서 이어서 작업할 때:** [C++ 전환 인수인계 문서](docs/RESUME_CPP_COMPILER.md)를
+먼저 읽으세요. C++ 전체 그래프 전환은 **진행 중**이며, 추가된 `NativeGraph*` 3개 파일은
+미컴파일·빌드 제외 초안입니다. 현재 기본 실행 경로는 아래의 Python MLIR baseline입니다.
+
 Standalone LLVM/MLIR compiler targeting the current PLENA NPU simulator.
 The project reuses the proven multi-level organization of the ETRI compiler,
 but its memory hierarchy, tiling, scheduling, command IR, and binary encoder

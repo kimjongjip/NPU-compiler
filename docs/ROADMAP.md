@@ -1,5 +1,13 @@
 # PLENA compiler roadmap
 
+## Current next task: native C++ migration on another server
+
+Read [RESUME_CPP_COMPILER.md](RESUME_CPP_COMPILER.md) first. It is the current
+handoff, including hardware assumptions, environment pins, uncompiled draft
+status and ordered implementation/acceptance steps. The user intends to use
+this compiler for memory-planning research, not just functional validation;
+Linalg-and-later planning/lowering should become native C++ MLIR passes.
+
 ## 2026-09-14 graph-pipeline update
 
 The default full-model path now consumes official Linalg IR operation-by-operation
