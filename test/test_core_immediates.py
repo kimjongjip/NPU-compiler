@@ -42,8 +42,11 @@ class MatrixEncodingTests(unittest.TestCase):
                          [0x37 | 1 << 10 | 3 << 22, 64, 4, 8])
         self.assertEqual(matrix_load(2, 1, 64, 128, funct=7),
                          [0x37 | 2 << 10 | 7 << 22, 1, 64, 128])
+        # ISA ver 1.0: one fixed 32x32x32 M_MMA word per 32-wide K slice.
         self.assertEqual(matrix_mma(1, 4, 64, funct=3, accumulate=True),
-                         [0x3b | 3 << 22 | 1 << 26, 1, 4, 64])
+                         [0x3b | 3 << 22 | 1 << 26] * 2)
+        self.assertEqual(matrix_mma(1, 4, 96, funct=1),
+                         [0x3b | 1 << 22] + [0x3b | 1 << 22 | 1 << 26] * 2)
         self.assertEqual(matrix_writeout(3, 1, 4, 8),
                          [0x3c | 3 << 6 | 1 << 22, 1, 4, 8])
         self.assertEqual(matrix_writeout(3, 1, 4, 16, funct=4),

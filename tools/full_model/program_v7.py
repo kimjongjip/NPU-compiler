@@ -14,8 +14,10 @@ from pathlib import Path
 from typing import Iterable
 
 
-PROGRAM_MAGIC = int.from_bytes(b"PLN7", "little")
-PROGRAM_VERSION = 7
+PROGRAM_MAGIC = int.from_bytes(b"PLNA", "little")
+# ISA ver 1.0 as major << 16 | minor. Program v7 used magic PLN7, version 7;
+# this module keeps its historical file name.
+PROGRAM_VERSION = 1 << 16 | 0
 PROGRAM_HEADER_WORDS = 5
 OP_CORE_BEGIN = 0x26
 OP_CORE_END = 0x27
@@ -305,7 +307,12 @@ class SystemProgramBuilder:
 
     def append(self, word: int | list[int]) -> None:
         if isinstance(word, (list, tuple)):
-            if len(word) != 4 or (word[0] & 0x3f) not in (0x36, 0x37, 0x3a, 0x3b, 0x3c):
+            if word and all(item & 0x3F == 0x3B for item in word):
+                # A matrix_mma() sequence: one-word fixed-tile M_MMAs.
+                for item in word:
+                    self.append(item)
+                return
+            if len(word) != 4 or (word[0] & 0x3f) not in (0x36, 0x37, 0x3a, 0x3c):
                 raise ValueError("expected a four-word inline Matrix record")
             if any(not 0 <= item < 1 << 32 for item in word):
                 raise ValueError("Matrix payload does not fit u32")
@@ -315,8 +322,8 @@ class SystemProgramBuilder:
         if not 0 <= word < 1 << 32:
             raise ValueError(f"core ISA word does not fit 32 bits: {word}")
         opcode = word & 0x3F
-        if opcode in (0x36, 0x37, 0x3a, 0x3b, 0x3c):
-            raise ValueError("Matrix needs an inline record; use matrix_load/mma/writeout")
+        if opcode in (0x36, 0x37, 0x3a, 0x3c):
+            raise ValueError("Matrix needs an inline record; use matrix_load/writeout")
         if opcode == 0x39 and ((word >> 22) & 15) in (4, 5, 6, 8, 9, 10):
             raise ValueError("Matrix C_SET registers were removed in Program v7")
         if opcode in (0x2B, 0x3A):
@@ -566,7 +573,7 @@ class SystemProgramBuilder:
         core_isa_path.unlink()
         logical_cores = max(1, self.logical_core + 1)
         payload: dict[str, object] = {
-            "schema": "plena.v2.unified_program.v7",
+            "schema": "plena.v2.unified_program.isa_v1.0",
             "program": program_name,
             "program_word_count": len(unified_program) // 4,
             "command_count": len(self.commands),

@@ -22,7 +22,7 @@
     "completion_event_slots": 65536
   },
   "isa": {
-    "version": 7,
+    "version": 65536,
     "word_bits": 32,
     "address_unit": "byte"
   }

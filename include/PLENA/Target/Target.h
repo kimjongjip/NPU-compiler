@@ -24,7 +24,7 @@ struct TargetConfig {
   uint32_t kChunk = 64;
   uint32_t alignment = 64;
   uint32_t completionEventSlots = 65536;
-  uint32_t isaVersion = 7;
+  uint32_t isaVersion = 1u << 16; // ISA ver 1.0 (major << 16 | minor)
   std::vector<uint32_t> logicalToPhysical;
 
   llvm::Error validate() const;

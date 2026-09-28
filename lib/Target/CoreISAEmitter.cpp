@@ -16,6 +16,8 @@ constexpr uint32_t kOpSetControl = 0x39;
 constexpr uint32_t kOpLocalDma = 0x38;
 constexpr uint32_t kOpMatrixLoad = 0x37;
 constexpr uint32_t kOpMatrixMma = 0x3b | (3u << 22);
+// ISA ver 1.0: K elements consumed by one fixed 32x32x32 M_MMA.
+constexpr uint32_t kMmaTileK = 32;
 constexpr uint32_t kOpMatrixWriteoutF16 = 0x3c | (1u << 22);
 
 constexpr unsigned kActivationL1Register = 0;
@@ -143,10 +145,9 @@ CoreISAEmitter::emitMatmul(const CoreBlockPlan &plan) {
     append(tile.m);
     append(currentK);
     append(currentK * 2);
-    append(kOpMatrixMma | (kOffset != 0 ? 1u << 26 : 0));
-    append(tile.m);
-    append(tile.n);
-    append(currentK);
+    // Load weight, load activation, then one fixed-tile M_MMA per K slice.
+    for (uint32_t slice = 0; slice < currentK; slice += kMmaTileK)
+      append(kOpMatrixMma | (kOffset != 0 || slice != 0 ? 1u << 26 : 0));
   }
 
   loadU32(kOutputL1Register, *outputL1);

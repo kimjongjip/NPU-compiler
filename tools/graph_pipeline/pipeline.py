@@ -280,7 +280,7 @@ def command_ir(commands, words, hw, report, high_water):
         "k_chunk": hw.k_chunk,
         "alignment": 64,
         "completion_event_slots": hw.event_slots,
-        "isa_version": 7,
+        "isa_version": 1 << 16,
     }
     for k, v in attrs.items():
         m.operation.attributes["plena.target." + k] = integer(v)

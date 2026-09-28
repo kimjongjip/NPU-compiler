@@ -49,7 +49,7 @@ def normalized_config(
         "command_processor": {
             "completion_event_slots": int(command["completion_event_slots"])
         },
-        "isa": {"version": 7, "word_bits": 32, "address_unit": "byte"},
+        "isa": {"version": 1 << 16, "word_bits": 32, "address_unit": "byte"},
     }
 
 

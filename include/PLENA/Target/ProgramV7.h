@@ -13,8 +13,10 @@
 
 namespace plena::target {
 
-constexpr uint32_t kProgramV7Magic = 0x374e4c50u;
-constexpr uint32_t kProgramV7Version = 7;
+// ISA ver 1.0 container: magic "PLNA", version major << 16 | minor. The
+// ProgramV7 names are historical; Program v7 used magic "PLN7", version 7.
+constexpr uint32_t kProgramV7Magic = 0x414e4c50u;
+constexpr uint32_t kProgramV7Version = 1u << 16;
 constexpr uint32_t kNoneU32 = 0xffff'ffffu;
 
 struct GdmaLoadRecord {

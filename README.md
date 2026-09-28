@@ -117,7 +117,7 @@ The regression covers:
 - K=96 lowered as 64+32 temporal accumulation;
 - 1-core and 2-core N-axis placement;
 - round-trip parsing of every emitted MLIR level;
-- Rust simulator Program v7 decoding and exact FP16 output;
+- Rust simulator ISA ver 1.0 decoding and exact FP16 output;
 - rejection of a matmul without zero initialization.
 - frontend source ownership/no-symlink checks and model-driver CLI smoke test.
 
@@ -125,15 +125,18 @@ Reference results in the checked configuration:
 
 | Problem | Cores | NPU cycles | Exact |
 |---|---:|---:|---:|
-| `4x64 x 64x64` | 1 | 1,320 | yes |
-| `4x64 x 64x64` | 2 | 860 | yes |
-| `5x96 x 96x37` | 1 | 1,810 | yes |
-| `5x96 x 96x37` | 2 | 1,326 | yes |
-| `40x33 x 33x45` | 1 | 3,517 | yes |
-| `40x33 x 33x45` | 2 | 2,248 | yes |
+| `4x64 x 64x64` | 1 | 1,414 | yes |
+| `4x64 x 64x64` | 2 | 953 | yes |
+| `5x96 x 96x37` | 1 | 1,914 | yes |
+| `5x96 x 96x37` | 2 | 1,429 | yes |
+| `40x33 x 33x45` | 1 | 3,693 | yes |
+| `40x33 x 33x45` | 2 | 2,363 | yes |
 
 These are simulator results for regression, not measured hardware performance.
-These are Program v7 results from 2026-09-10. The simulator uses atomic masked
+These are PLENA ISA ver 1.0 results from 2026-09-28: `M_MMA` is one word per
+fixed 32x32x32 tile, so each K chunk emits `ceil(K/32)` MMAs after its W/A
+loads. Against the same simulator at Program v7 the cycles were 1,414 / 954 /
+1,912 / 1,428 / 3,569 / 2,300; K=33 pays one padded 32-wide slice per tile. The simulator uses atomic masked
 L2 writes, bounded LDMA write pipelining and continuous FP32 Matrix accumulation.
 Old v6 binaries must be regenerated. The native MLIR path still targets FP16
 matmul; typed Vector and Q4 lowering helpers are local Python backend APIs,

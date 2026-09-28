@@ -172,7 +172,7 @@ std::string plena::target::buildSystemManifestJSON(
   }
 
   llvm::json::Object root{
-      {"schema", "plena.v2.unified_program.v7"},
+      {"schema", "plena.v2.unified_program.isa_v1.0"},
       {"program", "program.bin"},
       {"program_word_count", static_cast<int64_t>(image.words.size())},
       {"command_count", image.commandCount},
@@ -195,7 +195,7 @@ llvm::Expected<std::string> plena::target::augmentCompileReportJSON(
   if (!root)
     return llvm::createStringError("compile report root is not an object");
   (*root)["program"] = llvm::json::Object{
-      {"abi", "unified_command_isa_v7"},
+      {"abi", "unified_command_isa_v1.0"},
       {"word_bits", 32},
       {"endianness", "little"},
       {"program_words", static_cast<int64_t>(image.words.size())},

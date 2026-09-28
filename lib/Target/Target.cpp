@@ -141,7 +141,8 @@ llvm::Error TargetConfig::validate() const {
     return llvm::createStringError(
         "completion_event_slots must hold two GDMA events and one core block");
   if (isaVersion != kProgramV7Version)
-    return llvm::createStringError("only PLENA unified Program version 7 is supported");
+    return llvm::createStringError(
+        "only PLENA ISA ver 1.0 (isa.version 65536 = 1 << 16) is supported");
   return llvm::Error::success();
 }
 
